@@ -1,0 +1,85 @@
+{
+  "name": "Ernst Monotone",
+  "type": "dark",
+  "version": "1.0.0",
+  "ui": {
+    "background": "#222222",
+    "backgroundBright": "#2a2a2a",
+    "backgroundDark": "#1a1a1a",
+    "foreground": "#cccccc",
+    "foregroundBright": "#ffffff",
+    "foregroundDark": "#999999",
+    "accent": "#888888",
+    "accentHover": "#aaaaaa",
+    "border": "#444444",
+    "borderBright": "#555555",
+    "success": "#888888",
+    "warning": "#aaaaaa",
+    "error": "#cccccc",
+    "info": "#999999"
+  },
+  "opacity": {
+    "foregroundAlpha10": "rgba(216, 212, 197, 0.1)",
+    "foregroundAlpha15": "rgba(216, 212, 197, 0.15)",
+    "foregroundAlpha20": "rgba(216, 212, 197, 0.2)",
+    "foregroundDarkAlpha20": "rgba(111, 107, 92, 0.2)",
+    "foregroundDarkAlpha30": "rgba(111, 107, 92, 0.3)"
+  },
+  "syntax": {
+    "keyword": "#cccccc",
+    "string": "#999999",
+    "comment": "#666666",
+    "number": "#aaaaaa",
+    "operator": "#cccccc",
+    "function": "#bbbbbb",
+    "variable": "#aaaaaa",
+    "type": "#bbbbbb",
+    "constant": "#cccccc",
+    "property": "#999999",
+    "tag": "#bbbbbb",
+    "attribute": "#aaaaaa",
+    "punctuation": "#cccccc",
+    "bracket": "#cccccc",
+    "brace": "#cccccc",
+    "parenthesis": "#cccccc"
+  },
+  "editor": {
+    "background": "#222222",
+    "foreground": "#cccccc",
+    "lineHighlight": "#2a2a2a",
+    "selection": "#444444",
+    "findMatch": "#555555",
+    "cursor": "#ffffff",
+    "wordHighlight": "#44444480",
+    "wordHighlightStrong": "#55555580",
+    "lineNumber": "#666666",
+    "lineNumberActive": "#cccccc",
+    "ruler": "#333333",
+    "bracket": "#cccccc",
+    "bracketMatch": "#888888",
+    "indent": "#333333",
+    "whitespace": "#444444"
+  },
+  "components": {
+    "sidebar": {
+      "background": "#262525",
+      "foreground": "#d8d4c5",
+      "border": "#6f6b5c",
+      "hover": "#2C2C2C",
+      "activeBackground": "#353535",
+      "activeForeground": "#efebdc"
+    },
+    "header": {
+      "background": "#262525",
+      "foreground": "#d8d4c5",
+      "border": "#6f6b5c"
+    },
+    "tabs": {
+      "background": "#262525",
+      "foreground": "#6f6b5c",
+      "activeBackground": "#353535",
+      "activeForeground": "#d8d4c5",
+      "border": "#6f6b5c"
+    }
+  }
+}

@@ -1,0 +1,138 @@
+/* File Tree Icons Styling - 新しいアイコンシステム用 */
+
+/* ファイルアイコンの基本スタイル */
+.file-icon {
+  flex-shrink: 0;
+  margin-right: 8px;
+  transition: all 0.15s ease;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ファイルアイコンの色テーマ（テキストと同色） */
+.file-icon {
+  color: var(--theme-sidebar-foreground, #bbbbbb);
+}
+
+/* ホバー効果 */
+.file-tree-item:hover .file-icon {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+/* ファイルツリーアイテムのレイアウト */
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+}
+
+.file-tree-item:hover {
+  background: var(--theme-sidebar-hover-background, rgba(255, 255, 255, 0.1));
+}
+
+.file-tree-item.selected {
+  background: var(--theme-sidebar-active-background, rgba(96, 156, 223, 0.3));
+}
+
+/* ファイル名のスタイル */
+.file-tree-item .file-name {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--theme-sidebar-foreground, #bbbbbb);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* インデントのためのスペーサー */
+.file-tree-indent {
+  display: inline-block;
+  width: 16px;
+  flex-shrink: 0;
+}
+
+/* 展開/折りたたみボタン */
+.expand-button {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--theme-sidebar-foreground-alpha50, rgba(187, 187, 187, 0.5));
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.expand-button:hover {
+  color: var(--theme-sidebar-foreground, #bbbbbb);
+  transform: scale(1.1);
+}
+
+.expand-button.expanded {
+  transform: rotate(90deg);
+}
+
+.expand-button.expanded:hover {
+  transform: rotate(90deg) scale(1.1);
+}
+
+/* 展開ボタンの矢印アイコン */
+.expand-arrow {
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+/* ファイルツリーコンテナ */
+.file-tree-container {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+}
+
+/* スクロールバーを隠す（Webkit） */
+.file-tree-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* スクロールバーを隠す（Firefox） */
+.file-tree-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* ドラッグ&ドロップ関連 */
+.file-tree-item.drag-over {
+  background: var(--theme-sidebar-active-background, rgba(96, 156, 223, 0.2));
+  border: 1px dashed var(--theme-sidebar-border, #404040);
+}
+
+.file-tree-item.dragging {
+  opacity: 0.5;
+}
+
+/* 右クリックメニュー（後で実装） */
+.context-menu {
+  position: absolute;
+  background: var(--theme-sidebar-background, #1e1e1e);
+  border: 1px solid var(--theme-sidebar-border, #404040);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  min-width: 120px;
+}

@@ -1,0 +1,252 @@
+/* ===== Ernst Editor - Header Styles ===== */
+
+.header {
+  height: var(--header-height);
+  background-color: var(--col-bg);
+  border-bottom: 1px solid var(--col-bg-dark);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-size-ui-header);
+  color: var(--col-frnt);
+  position: relative;
+  z-index: var(--z-header);
+  user-select: none;
+  -webkit-app-region: drag; /* ドラッグ可能なタイトルバー */
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Menu Bar */
+.menu-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 8px;
+}
+
+.menu-item {
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: var(--font-size-ui-base);
+  font-weight: 400;
+  color: var(--col-frnt);
+  /* transition: background-color var(--transition-fast); */
+  -webkit-app-region: no-drag; /* メニューアイテムはドラッグ無効 */
+}
+
+.menu-item:hover {
+  background-color: var(--col-frnt-alpha-10);
+}
+
+.menu-item:active {
+  background-color: var(--col-frnt-alpha-20);
+}
+
+.menu-item.active {
+  background-color: var(--col-frnt-alpha-15);
+}
+
+/* Dropdown Menu */
+.menu-container {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--col-bg-bright);
+  border: 1px solid var(--col-frnt-dark-alpha-30);
+  border-radius: 4px;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: var(--z-dropdown);
+  padding: 4px 0;
+  -webkit-app-region: no-drag;
+}
+
+.menu-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  color: var(--col-frnt);
+  font-size: var(--font-size-ui-base);
+  cursor: pointer;
+  /* transition: background-color var(--transition-fast); */
+}
+
+.menu-option:hover {
+  background-color: var(--col-gsuc-alpha-20);
+}
+
+.menu-option span:first-child {
+  flex: 1;
+}
+
+.shortcut {
+  color: var(--col-frnt-dark);
+  font-size: var(--font-size-ui-small);
+  margin-left: 16px;
+}
+
+.menu-separator {
+  height: 1px;
+  background-color: var(--col-frnt-dark-alpha-30);
+  margin: 4px 0;
+}
+
+/* Project Info */
+.project-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-ui-header);
+  color: var(--col-frnt-dark);
+  font-weight: 500;
+}
+
+.project-name {
+  color: var(--col-frnt);
+  font-weight: 600;
+}
+
+.separator {
+  color: var(--col-frnt-dark);
+  font-weight: 300;
+}
+
+.file-name {
+  color: var(--col-frnt);
+  font-weight: 500;
+}
+
+/* Connection Status */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 0px;
+  background-color: var(--col-bg-dark);
+  padding: 8px;
+  height: var(--header-height);
+  border-radius: 0px;
+  -webkit-app-region: no-drag;
+  transition: background-color var(--transition-fast);
+}
+
+.connection-status.error {
+  background-color: #cf222e;
+}
+
+.connection-status.disconnected {
+  background-color: var(--col-bg-dark);
+}
+
+.connection-status.connected {
+  background-color: #3aab5f;
+}
+
+.connection-indicator-icon {
+  flex-shrink: 0;
+  font-size: var(--font-size-ui-icon);
+  color: white;
+}
+
+.connection-text {
+  font-size: var(--font-size-ui-status-bar);
+  font-weight: 500;
+  font-family: var(--font-ui);
+  color: white;
+}
+
+/* Window Controls */
+.window-controls {
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag; /* ウィンドウコントロールはドラッグ無効 */
+}
+
+.window-control {
+  width: 46px;
+  height: var(--header-height);
+  border: none;
+  background: none;
+  color: var(--col-frnt);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* transition: background-color var(--transition-fast); */
+  font-size: var(--font-size-ui-icon);
+}
+
+.window-control .material-symbols-outlined {
+  font-size: var(--font-size-ui-icon) !important;
+}
+
+.window-control.minimize:hover {
+  background-color: var(--col-frnt-alpha-10);
+}
+
+.window-control.maximize:hover {
+  background-color: var(--col-frnt-alpha-10);
+}
+
+.window-control.close:hover {
+  background-color: var(--col-error);
+  color: var(--col-bg);
+}
+
+.window-control:active {
+  /* transform: scale(0.95); */
+}
+
+/* Header Responsive Design */
+@media (max-width: 800px) {
+  .project-info {
+    font-size: var(--font-size-ui-base);
+  }
+}
+
+@media (max-width: 600px) {
+  .menu-bar {
+    gap: 0;
+  }
+
+  .menu-item {
+    padding: 4px 6px;
+    font-size: var(--font-size-ui-base);
+  }
+
+  .header-center {
+    position: static;
+    transform: none;
+    flex: 0;
+    margin: 0 8px;
+  }
+}

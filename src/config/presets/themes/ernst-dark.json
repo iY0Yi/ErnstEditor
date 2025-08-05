@@ -1,0 +1,81 @@
+{
+  "name": "Ernst Dark",
+  "type": "dark",
+  "ui": {
+    "background": "#181818",
+    "backgroundBright": "#202020",
+    "backgroundDark": "#000000",
+    "foreground": "#BBBBBB",
+    "foregroundBright": "#EEEEEE",
+    "foregroundDark": "#555555",
+    "success": "#3aab5f",
+    "warning": "#ff6044",
+    "error": "#cf222e",
+    "info": "#609cdf",
+    "accent": "#555555",
+    "border": "#555555"
+  },
+  "opacity": {
+    "foregroundAlpha10": "rgba(187, 187, 187, 0.1)",
+    "foregroundAlpha15": "rgba(187, 187, 187, 0.15)",
+    "foregroundAlpha20": "rgba(187, 187, 187, 0.2)",
+    "foregroundDarkAlpha20": "rgba(102, 102, 102, 0.2)",
+    "foregroundDarkAlpha30": "rgba(102, 102, 102, 0.3)",
+    "successAlpha20": "rgba(58, 171, 95, 0.2)",
+    "warningAlpha20": "rgba(255, 96, 68, 0.2)",
+    "errorAlpha20": "rgba(207, 34, 46, 0.2)"
+  },
+  "syntax": {
+    "default": "BBBBBB",
+    "comment": "666666",
+    "keyword": "3aab5f",
+    "keywordControl": "3aab5f",
+    "keywordType": "3aab5f",
+    "keywordFunction": "609cdf",
+    "keywordStorage": "3aab5f",
+    "string": "032f62",
+    "stringEscape": "c739ff",
+    "number": "c739ff",
+    "constant": "c739ff",
+    "variable": "BBBBBB",
+    "function": "609cdf",
+    "operator": "ff6044",
+    "delimiter": "555555",
+    "preprocessor": "888888"
+  },
+  "editor": {
+    "background": "#181818",
+    "foreground": "#BBBBBB",
+    "selectionBackground": "#BBBBBB44",
+    "lineHighlightBackground": "#202020",
+    "cursorForeground": "#BBBBBB",
+    "lineNumberForeground": "#666666",
+    "lineNumberActiveForeground": "#BBBBBB",
+    "whitespaceForeground": "#555555",
+    "findMatchBackground": "#BBBBBB66",
+    "findMatchHighlightBackground": "#BBBBBB44",
+    "selectionHighlightBackground": "#BBBBBB44"
+  },
+  "components": {
+    "sidebar": {
+      "background": "#181818",
+      "foreground": "#BBBBBB",
+      "border": "#555555",
+      "hover": "#202020",
+      "activeBackground": "#262626",
+      "activeForeground": "#EEEEEE"
+    },
+    "header": {
+      "background": "#181818",
+      "foreground": "#BBBBBB",
+      "border": "#555555"
+    },
+    "tabs": {
+      "background": "#181818",
+      "foreground": "#666666",
+      "activeBackground": "#262626",
+      "activeForeground": "#BBBBBB",
+      "border": "#555555"
+    }
+  }
+}

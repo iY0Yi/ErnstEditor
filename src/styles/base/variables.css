@@ -1,0 +1,60 @@
+/* ===== Ernst Editor - CSS Variables & Color Palette ===== */
+
+:root {
+  /* Ernst Color Palette - Base Colors */
+  /* NOTE: Color values are now dynamically set by ConfigManager from theme JSON files */
+  /*
+  --col-bg: #262525;
+  --col-bg-bright: #2C2C2C;
+  --col-frnt: #d8d4c5;
+  --col-frnt-dark: #6f6b5c;
+  --col-gsuc: #609cdf;
+  --col-suc: #5acb65;
+  --col-error: #FE8565;
+  --col-accent: #D4BE98;
+  --col-bg: #181818;
+  --col-bg-bright: #202020;
+  --col-bg-dark: #000000;
+  --col-frnt: #b9b9b9;
+  --col-frnt-bright: #d8d8d8;
+  --col-frnt-dark: #6e6e6e;
+  --col-gsuc: #609cdf;
+  --col-suc: #5acb65;
+  --col-error: #FE8565;
+  --col-accent: #c4c4c4;
+
+  */
+
+  /* Typography */
+  --font-ui: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-mono: 'Overpass Mono', 'Consolas', 'Monaco', monospace;
+
+  /* UI Font Sizes - Will be dynamically updated by ConfigManager */
+  --font-size-ui-base: 13px;
+  --font-size-ui-small: 11px;
+  --font-size-ui-large: 15px;
+  --font-size-ui-header: 16px;
+  --font-size-ui-sidebar: 12px;
+  --font-size-ui-tabs: 13px;
+  --font-size-ui-status-bar: 11px;
+  --font-size-ui-icon: 16px;
+  --font-size-ui-welcome: 18px;
+  --font-size-ui-detail: 10px;
+  --font-size-ui-material-icons: 20px;
+
+  /* Spacing */
+  --sidebar-min-width: 200px;
+  --sidebar-max-width: 600px;
+  --sidebar-default-width: 250px;
+  --header-height: 30px;
+  --editor-header-height: 40px;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+
+  /* Z-index layers */
+  --z-sidebar-resizer: 1000;
+  --z-header: 1000;
+  --z-dropdown: 1001;
+  --z-inline-float: 10000;
+}
