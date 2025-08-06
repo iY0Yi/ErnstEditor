@@ -30,7 +30,7 @@ export function useFileOperations(
     }
   };
 
-  const handleSaveFile = async (): Promise<void> => {
+    const handleSaveFile = async (): Promise<void> => {
     if (activeTab.filePath && editorRef.current) {
       const content = editorRef.current.getValue();
       const result = await window.electronAPI.saveFile(activeTab.filePath, content);

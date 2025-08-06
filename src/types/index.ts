@@ -36,6 +36,10 @@ export interface ElectronAPI {
 
   // 検索用API
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<SearchResult[]>;
+
+  // コマンドライン引数からのファイル開き用API
+  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string }) => void) => void;
+  removeFileOpenFromCLIListener: () => void;
 }
 
 // グローバル型定義

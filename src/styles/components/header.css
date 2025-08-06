@@ -1,16 +1,16 @@
 /* ===== Ernst Editor - Header Styles ===== */
 
 .header {
-  height: var(--header-height);
-  background-color: var(--col-bg);
-  border-bottom: 1px solid var(--col-bg-dark);
+  height: 32px;
+  background-color: var(--theme-header-background);
+  border-bottom: 1px solid var(--theme-ui-background-dark);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: var(--font-size-ui-header);
-  color: var(--col-frnt);
+  font-size: 13px;
+  color: var(--theme-header-foreground);
   position: relative;
-  z-index: var(--z-header);
+  z-index: 1000;
   user-select: none;
   -webkit-app-region: drag; /* ドラッグ可能なタイトルバー */
 }
@@ -51,23 +51,23 @@
   padding: 4px 8px;
   border-radius: 3px;
   cursor: pointer;
-  font-size: var(--font-size-ui-base);
+  font-size: 13px;
   font-weight: 400;
-  color: var(--col-frnt);
-  /* transition: background-color var(--transition-fast); */
+  color: var(--theme-header-foreground);
+  transition: background-color 0.1s ease;
   -webkit-app-region: no-drag; /* メニューアイテムはドラッグ無効 */
 }
 
 .menu-item:hover {
-  background-color: var(--col-frnt-alpha-10);
+  background-color: var(--theme-sidebar-hover);
 }
 
 .menu-item:active {
-  background-color: var(--col-frnt-alpha-20);
+  background-color: var(--theme-tabs-active-background);
 }
 
 .menu-item.active {
-  background-color: var(--col-frnt-alpha-15);
+  background-color: var(--theme-sidebar-hover);
 }
 
 /* Dropdown Menu */
@@ -79,12 +79,12 @@
   position: absolute;
   top: 100%;
   left: 0;
-  background-color: var(--col-bg-bright);
-  border: 1px solid var(--col-frnt-dark-alpha-30);
+  background-color: var(--theme-input-background);
+  border: 1px solid var(--theme-input-border);
   border-radius: 4px;
   min-width: 200px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: var(--z-dropdown);
+  z-index: 2000;
   padding: 4px 0;
   -webkit-app-region: no-drag;
 }
@@ -94,14 +94,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  color: var(--col-frnt);
-  font-size: var(--font-size-ui-base);
+  color: var(--theme-input-foreground);
+  font-size: 13px;
   cursor: pointer;
-  /* transition: background-color var(--transition-fast); */
+  transition: background-color 0.1s ease;
 }
 
 .menu-option:hover {
-  background-color: var(--col-gsuc-alpha-20);
+  background-color: var(--theme-tabs-active-background);
 }
 
 .menu-option span:first-child {
@@ -109,14 +109,14 @@
 }
 
 .shortcut {
-  color: var(--col-frnt-dark);
-  font-size: var(--font-size-ui-small);
+  color: var(--theme-ui-background-light);
+  font-size: 12px;
   margin-left: 16px;
 }
 
 .menu-separator {
   height: 1px;
-  background-color: var(--col-frnt-dark-alpha-30);
+  background-color: var(--theme-input-border);
   margin: 4px 0;
 }
 
@@ -125,23 +125,23 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--font-size-ui-header);
-  color: var(--col-frnt-dark);
+  font-size: 13px;
+  color: var(--theme-ui-background-light);
   font-weight: 500;
 }
 
 .project-name {
-  color: var(--col-frnt);
+  color: var(--theme-header-foreground);
   font-weight: 600;
 }
 
 .separator {
-  color: var(--col-frnt-dark);
+  color: var(--theme-ui-background-light);
   font-weight: 300;
 }
 
 .file-name {
-  color: var(--col-frnt);
+  color: var(--theme-header-foreground);
   font-weight: 500;
 }
 
@@ -151,12 +151,13 @@
   align-items: center;
   gap: 6px;
   margin-right: 0px;
-  background-color: var(--col-bg-dark);
-  padding: 8px;
-  height: var(--header-height);
+  background-color: var(--theme-ui-background-dark);
+  padding: 0 8px;
+  height: 32px;
   border-radius: 0px;
   -webkit-app-region: no-drag;
-  transition: background-color var(--transition-fast);
+  transition: background-color 0.2s ease;
+  box-sizing: border-box;
 }
 
 .connection-status.error {
@@ -164,7 +165,7 @@
 }
 
 .connection-status.disconnected {
-  background-color: var(--col-bg-dark);
+  background-color: var(--theme-ui-background-dark);
 }
 
 .connection-status.connected {
@@ -173,14 +174,13 @@
 
 .connection-indicator-icon {
   flex-shrink: 0;
-  font-size: var(--font-size-ui-icon);
+  font-size: 12px;
   color: white;
 }
 
 .connection-text {
-  font-size: var(--font-size-ui-status-bar);
+  font-size: 11px;
   font-weight: 500;
-  font-family: var(--font-ui);
   color: white;
 }
 
@@ -193,33 +193,31 @@
 
 .window-control {
   width: 46px;
-  height: var(--header-height);
+  height: 32px;
   border: none;
   background: none;
-  color: var(--col-frnt);
+  color: var(--theme-header-foreground);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* transition: background-color var(--transition-fast); */
-  font-size: var(--font-size-ui-icon);
+  transition: background-color 0.1s ease;
+  font-size: 14px;
 }
 
-.window-control .material-symbols-outlined {
-  font-size: var(--font-size-ui-icon) !important;
-}
+
 
 .window-control.minimize:hover {
-  background-color: var(--col-frnt-alpha-10);
+  background-color: var(--theme-sidebar-hover);
 }
 
 .window-control.maximize:hover {
-  background-color: var(--col-frnt-alpha-10);
+  background-color: var(--theme-sidebar-hover);
 }
 
 .window-control.close:hover {
-  background-color: var(--col-error);
-  color: var(--col-bg);
+  background-color: #cf222e;
+  color: white;
 }
 
 .window-control:active {
@@ -229,7 +227,7 @@
 /* Header Responsive Design */
 @media (max-width: 800px) {
   .project-info {
-    font-size: var(--font-size-ui-base);
+    font-size: 12px;
   }
 }
 
@@ -240,7 +238,7 @@
 
   .menu-item {
     padding: 4px 6px;
-    font-size: var(--font-size-ui-base);
+    font-size: 12px;
   }
 
   .header-center {

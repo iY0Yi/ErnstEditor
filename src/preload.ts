@@ -24,6 +24,10 @@ interface ElectronAPI {
 
   // 検索用API
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<any[]>;
+
+  // コマンドライン引数からのファイル開き用API
+  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string }) => void) => void;
+  removeFileOpenFromCLIListener: () => void;
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -49,5 +53,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadTheme: (themeName?: string) => ipcRenderer.invoke('theme:load', themeName),
 
   // 検索用API
-  searchInFiles: (searchTerm: string, projectRoot?: string) => ipcRenderer.invoke('search:files', searchTerm, projectRoot)
+  searchInFiles: (searchTerm: string, projectRoot?: string) => ipcRenderer.invoke('search:files', searchTerm, projectRoot),
+
+  // コマンドライン引数からのファイル開き用API
+  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string }) => void) => {
+    ipcRenderer.on('file:open-from-cli', (event, data) => callback(data));
+  },
+  removeFileOpenFromCLIListener: () => {
+    ipcRenderer.removeAllListeners('file:open-from-cli');
+  }
 } as ElectronAPI);

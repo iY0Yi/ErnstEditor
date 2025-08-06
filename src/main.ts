@@ -1,8 +1,46 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import { blenderService } from './services/blenderService';
 
 let mainWindow: BrowserWindow | null = null;
+
+// コマンドライン引数からファイルパスを取得
+function getFilePathFromArgs(argv: string[]): string | null {
+  // 引数の例: ['electron', 'main.js', 'path/to/file.glsl']
+  // または: ['ErnstEditor.exe', 'path/to/file.glsl']
+
+  const args = argv.slice(process.env.NODE_ENV === 'development' ? 2 : 1);
+
+  for (const arg of args) {
+    // ファイルパスかどうかをチェック（--で始まるオプションは除外）
+    if (!arg.startsWith('-') && fs.existsSync(arg)) {
+      return path.resolve(arg);
+    }
+  }
+
+  return null;
+}
+
+// ファイルをレンダラープロセスで開くためのイベント送信
+function openFileInRenderer(filePath: string) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const fileName = path.basename(filePath);
+
+      mainWindow.webContents.send('file:open-from-cli', {
+        filePath,
+        content,
+        fileName
+      });
+
+      console.log(`📂 Opening file from command line: ${filePath}`);
+    } catch (error) {
+      console.error(`❌ Failed to open file from command line: ${error}`);
+    }
+  }
+}
 
 const createWindow = (): void => {
   // メニューバーを無効化
@@ -371,8 +409,50 @@ async function searchInFile(filePath: string, searchTerm: string, results: any[]
   }
 }
 
-app.whenReady().then(() => {
+// シングルインスタンス設定（既に起動している場合は既存のウィンドウにフォーカス）
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  // セカンドインスタンスが起動された時の処理
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // 既存のウィンドウがある場合はフォーカス
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+
+      // コマンドライン引数からファイルパスを取得して開く
+      const filePath = getFilePathFromArgs(commandLine);
+      if (filePath) {
+        openFileInRenderer(filePath);
+      }
+    }
+  });
+}
+
+app.whenReady().then(async () => {
   createWindow();
+
+  // 起動時のコマンドライン引数をチェック
+  const filePath = getFilePathFromArgs(process.argv);
+  if (filePath) {
+    // ウィンドウが完全に読み込まれるまで少し待つ
+    setTimeout(() => {
+      openFileInRenderer(filePath);
+    }, 1000);
+  }
+
+  // Blender WebSocket サービスを開始（一時的に無効化）
+  console.log('⚠️ WebSocket Server temporarily disabled for testing');
+  /*
+  try {
+    await blenderService.start();
+    console.log('✅ Ernst Editor WebSocket Server started on port 8765');
+  } catch (error) {
+    console.error('❌ Failed to start WebSocket Server:', error);
+  }
+  */
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -381,7 +461,17 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
+  // Blender WebSocket サービスを停止（一時的に無効化）
+  /*
+  try {
+    await blenderService.stop();
+    console.log('🛑 Ernst Editor WebSocket Server stopped');
+  } catch (error) {
+    console.error('❌ Failed to stop WebSocket Server:', error);
+  }
+  */
+
   if (process.platform !== 'darwin') {
     app.quit();
   }

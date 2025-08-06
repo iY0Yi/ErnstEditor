@@ -49,3 +49,13 @@ Thumbs.db
 
 # Ernst Editor session data
 .ernst/
+
+# Test files
+test.glsl
+
+# electron-builder cache
+.cache/
+
+# Package lock files (choose one based on preference)
+# package-lock.json  # Uncomment if using yarn
+# yarn.lock         # Uncomment if using npm

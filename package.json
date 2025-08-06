@@ -6,9 +6,10 @@
   "scripts": {
     "start": "electron .",
     "build": "webpack --config webpack.config.js && webpack --config webpack.main.config.js && webpack --config webpack.preload.config.js",
+    "build-exe": "npm run build && electron-packager . ErnstEditor --platform=win32 --arch=x64 --out=build --overwrite",
     "dev": "npm run build && electron .",
     "webpack:watch": "concurrently \"webpack --config webpack.config.js --watch\" \"webpack --config webpack.main.config.js --watch\" \"webpack --config webpack.preload.config.js --watch\"",
-    "electron:dev": "wait-on dist/main.js dist/preload.js dist/renderer.js && nodemon --watch dist --exec \"electron .\"",
+    "electron:dev": "wait-on dist/main.js dist/preload.js dist/renderer.js && nodemon --watch dist --delay 500ms --exec \"electron .\"",
     "dev-electron": "concurrently --kill-others \"npm run webpack:watch\" \"npm run electron:dev\""
   },
   "devDependencies": {
@@ -18,10 +19,13 @@
     "@types/node": "^18.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/ws": "^8.18.1",
     "babel-loader": "^9.1.0",
     "concurrently": "^9.2.0",
     "css-loader": "^6.7.0",
     "electron": "^22.0.0",
+    "electron-builder": "^26.0.12",
+    "electron-packager": "^17.1.2",
     "nodemon": "^3.1.10",
     "style-loader": "^3.3.0",
     "typescript": "^4.9.0",
@@ -31,8 +35,43 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "glsl-tokenizer": "^2.1.5",
     "monaco-editor": "^0.44.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "ws": "^8.18.3"
+  },
+  "build": {
+    "appId": "com.ernst.editor",
+    "productName": "ErnstEditor",
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "src/index.html",
+      "src/config/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "src/config",
+        "to": "config"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": null
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}.exe"
+    }
   }
 }

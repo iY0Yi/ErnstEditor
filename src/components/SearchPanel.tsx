@@ -273,7 +273,7 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
-        
+
         .loading-icon {
           animation: spin 1s linear infinite;
         }
@@ -281,7 +281,7 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
         .search-results-list::-webkit-scrollbar {
           display: none;
         }
-        
+
         .search-results-list {
           scrollbar-width: none;
           -ms-overflow-style: none;

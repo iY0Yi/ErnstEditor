@@ -1,0 +1,244 @@
+/* ===== Ernst Editor - Inline Float Slider Styles ===== */
+
+.inline_1f-container {
+  height: 40px;
+  margin-top: 35px;
+  background: var(--theme-input-background);
+  border: 0px solid var(--theme-input-border);
+  border-radius: 0px;
+  padding: 20px;
+  width: 400px;
+  box-shadow: 0px 0.2px 0.2px hsl(0deg 0% 0% / 1.0),
+  0px 0.3px 0.2px -0.5px hsl(0deg 0% 0% / 0.68),
+  0px 0.5px 0.4px -1.1px hsl(0deg 0% 0% / 0.62),
+  0px 1px 0.8px -1.6px hsl(0deg 0% 0% / 0.56),
+  -0.1px 2px 1.6px -2.1px hsl(0deg 0% 0% / 0.50),
+  -0.1px 3.6px 2.8px -2.6px hsl(0deg 0% 0% / 0.44),
+  -0.2px 6px 4.7px -3.2px hsl(0deg 0% 0% / 0.38),
+  -0.3px 9.3px 7.3px -3.7px hsl(0deg 0% 0% / 0.32),
+  -0.4px 13.8px 10.9px -4.2px hsl(0deg 0% 0% / 0.29),
+  -0.6px 19.4px 15.3px -4.7px hsl(0deg 0% 0% / 0.2);
+  z-index: 1000;
+}
+
+.inline_1f-slider-cell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inline_1f-track-container {
+  flex-grow: 1;
+  position: relative;
+}
+
+.inline_1f-number-input {
+  width: 60px;
+  height: 24px;
+  border: 1px solid var(--theme-input-border);
+  border-radius: 2px;
+  background: var(--theme-input-background);
+  color: var(--theme-input-foreground);
+  font-size: 11px;
+  text-align: center;
+  outline: none;
+  font-family: var(--theme-font-family-ui, 'Mulish', sans-serif);
+  padding: 0 2px;
+  -moz-appearance: textfield; /* Firefox: スピンボタンを隠す */
+}
+
+.inline_1f-number-input:focus {
+  border-color: var(--theme-tabs-active-background);
+  box-shadow: 0 0 0 1px var(--theme-tabs-active-background);
+}
+
+/* WebKit (Chrome, Safari, Edge): スピンボタンのスタイル */
+.inline_1f-number-input::-webkit-outer-spin-button,
+.inline_1f-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+  width: 16px;
+  height: 100%;
+  background: linear-gradient(to bottom,
+    var(--theme-tabs-background) 0%,
+    var(--theme-tabs-background) 50%,
+    var(--theme-input-border) 50%,
+    var(--theme-tabs-background) 50%,
+    var(--theme-tabs-background) 100%);
+  border-left: 1px solid var(--theme-input-border);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+  position: relative;
+}
+
+.inline_1f-number-input:hover::-webkit-outer-spin-button,
+.inline_1f-number-input:hover::-webkit-inner-spin-button {
+  opacity: 1;
+}
+
+.inline_1f-number-input::-webkit-inner-spin-button::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-bottom: 4px solid var(--theme-input-foreground);
+}
+
+.inline_1f-number-input::-webkit-inner-spin-button::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--theme-input-foreground);
+}
+
+.inline_1f-track {
+  width: 100%;
+  height: 2px;
+  top: 1px;
+  background: var(--theme-tabs-background);
+  border-radius: 2px;
+  position: relative;
+}
+
+.inline_1f-slider {
+  position: absolute;
+  width: 100%;
+  height: 40px;
+  top: -20px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  z-index: 1000;
+}
+
+.inline_1f-knob {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--theme-input-foreground);
+  border-radius: 50%;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.slider-modified-value {
+  background: var(--theme-search-highlight);
+}
+
+.slider-value-overlay {
+  color: var(--theme-input-foreground);
+  margin-left: 4px;
+}
+
+/* マーカー隠蔽 - 強力なセレクター */
+.inline-float-hidden-marker,
+.mtki.inline-float-hidden-marker,
+span.mtki[data-marker="inline1f"],
+span[title*="inline1f"],
+span:contains("+u_inline1f"),
+*:contains("+u_inline1f") {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-indent: -9999px !important;
+  color: transparent !important;
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+}
+
+.inline-float-overlay {
+  position: relative !important;
+  z-index: 1000 !important;
+  background: transparent !important;
+  color: transparent !important;
+}
+
+/* Ernst現在のスタイルとの互換性 */
+.ernst-inline-slider-container {
+  /* inline_1f-containerと同じスタイル */
+  height: 40px;
+  margin-top: 35px;
+  background: var(--theme-input-background);
+  border-radius: 0px;
+  padding: 20px;
+  width: 400px;
+  box-shadow: 0px 0.2px 0.2px hsl(0deg 0% 0% / 1.0),
+    0px 0.3px 0.2px -0.5px hsl(0deg 0% 0% / 0.68),
+    0px 0.5px 0.4px -1.1px hsl(0deg 0% 0% / 0.62),
+    0px 1px 0.8px -1.6px hsl(0deg 0% 0% / 0.56),
+    -0.1px 2px 1.6px -2.1px hsl(0deg 0% 0% / 0.50),
+    -0.1px 3.6px 2.8px -2.6px hsl(0deg 0% 0% / 0.44),
+    -0.2px 6px 4.7px -3.2px hsl(0deg 0% 0% / 0.38),
+    -0.3px 9.3px 7.3px -3.7px hsl(0deg 0% 0% / 0.32),
+    -0.4px 13.8px 10.9px -4.2px hsl(0deg 0% 0% / 0.29),
+    -0.6px 19.4px 15.3px -4.7px hsl(0deg 0% 0% / 0.2);
+  z-index: 1000;
+}
+
+.ernst-inline-slider {
+  width: 100%;
+  height: 4px;
+  margin: 4px 0;
+  appearance: none;
+  background: var(--theme-tabs-background);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ernst-inline-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-input-foreground);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.ernst-inline-slider::-webkit-slider-thumb:hover {
+  background: var(--theme-tabs-active-background);
+}
+
+.ernst-inline-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-input-foreground);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
