@@ -11,15 +11,18 @@ import { getLanguageFromFileName } from '../components/language';
 import { generateId } from '../utils/idUtils';
 import { FileTab } from '../types';
 import InlineFloatManager from '../components/gui/InlineFloat';
+import InlineNudgeboxManager from '../components/gui/InlineNudgebox';
 
 // CSSをWebpack経由でインポート（ホットリロード対応）
 import '../styles/components/inline-float-slider.css';
+import '../styles/components/inline-nudgebox.css';
 import '../styles/components/header.css';
 
 const App: React.FC = () => {
   const monaco = useMonaco();
   const editorRef = React.useRef<any>(null);
   const inlineFloatManagerRef = React.useRef<InlineFloatManager | null>(null);
+  const inlineNudgeboxManagerRef = React.useRef<InlineNudgeboxManager | null>(null);
 
   // WebSocket接続状態管理
   const [connectionStatus, setConnectionStatus] = React.useState<'connected' | 'disconnected' | 'error'>('disconnected');
@@ -76,8 +79,8 @@ const App: React.FC = () => {
   React.useEffect(() => {
     // InlineFloatManagerが初期化された場合の接続状態チェック
     const checkConnectionStatus = () => {
-      if (inlineFloatManagerRef.current) {
-        // InlineFloatManagerがあれば接続可能状態とする
+      if (inlineNudgeboxManagerRef.current) {
+        // InlineNudgeboxManagerがあれば接続可能状態とする
         setConnectionStatus('connected');
       } else {
         setConnectionStatus('disconnected');
@@ -289,6 +292,11 @@ const App: React.FC = () => {
         inlineFloatManagerRef.current = null;
         console.log('🧹 InlineFloat manager disposed');
       }
+      if (inlineNudgeboxManagerRef.current) {
+        inlineNudgeboxManagerRef.current.dispose();
+        inlineNudgeboxManagerRef.current = null;
+        console.log('🧹 InlineNudgebox manager disposed');
+      }
     };
   }, []);
 
@@ -306,26 +314,21 @@ const App: React.FC = () => {
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, handleSaveFile);
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyN, handleNewFile);
 
-    // InlineFloatManager を統合
-    if (!inlineFloatManagerRef.current) {
-      console.log('🔧 Creating new InlineFloatManager...');
-      inlineFloatManagerRef.current = new InlineFloatManager(
+    // InlineFloatManager を無効化（Inline Nudgebox (Float) 実装まで）
+    console.log('⚠️ InlineFloatManager disabled for Inline Nudgebox development');
+
+    // Inline Nudgebox (Float) を統合
+    if (!inlineNudgeboxManagerRef.current) {
+      console.log('🔧 Creating new InlineNudgeboxManager...');
+      inlineNudgeboxManagerRef.current = new InlineNudgeboxManager(
         () => activeTabRef.current,  // 最新のアクティブタブを取得
         (...args) => updateTabRef.current(...args)  // 最新のタブ更新関数
       );
-      console.log('🔧 Integrating with Monaco Editor...');
-      inlineFloatManagerRef.current.integrate(editor);
-      console.log('✅ InlineFloat integrated with Monaco Editor');
-
-      // 統合確認
-      const widget = inlineFloatManagerRef.current.getWidget();
-      if (widget) {
-        console.log('✅ InlineFloat widget created successfully');
-      } else {
-        console.error('❌ InlineFloat widget creation failed');
-      }
+      console.log('🔧 Integrating Nudgebox with Monaco Editor...');
+      inlineNudgeboxManagerRef.current.integrate(editor);
+      console.log('✅ InlineNudgebox integrated with Monaco Editor');
     } else {
-      console.log('⚠️ InlineFloatManager already exists, skipping integration');
+      console.log('⚠️ InlineNudgeboxManager already exists, skipping integration');
     }
 
     // 初期モデルの設定
@@ -437,21 +440,14 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // テーマローディング中の表示
+  // テーマローディング中の表示（シンプルに背景色のみ）
   if (themeLoading) {
     return (
       <div style={{
         height: '100vh',
         width: '100vw',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#181818',
-        color: '#BBBBBB',
-        fontSize: '14px'
-      }}>
-        Loading Ernst Editor...
-      </div>
+        backgroundColor: '#101010'
+      }} />
     );
   }
 
@@ -460,7 +456,8 @@ const App: React.FC = () => {
       height: '100vh',
       width: '100vw',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      backgroundColor: '#101010' // 初期背景色を統一
     }}>
       {/* ヘッダー（メニューバー + プロジェクト情報 + 接続ステータス + ウィンドウコントロール） */}
       <Header
@@ -513,6 +510,7 @@ const App: React.FC = () => {
                             options={{
                 fontSize: 14,
                 automaticLayout: true, // 自動レイアウト（公式推奨）
+                mouseWheelZoom: true, // Ctrl+スクロールでフォントサイズ変更を有効化
                 minimap: {
                   enabled: true,
                   side: 'right',

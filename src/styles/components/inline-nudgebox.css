@@ -1,0 +1,135 @@
+/* Inline Nudgebox (Float) スタイル */
+
+.inline-nudgebox-container {
+  position: relative;
+  z-index: 1000;
+  font-family: var(--theme-editor-font-family, 'Consolas', monospace);
+  font-size: 14px;
+  margin-top: 27px;
+  margin-left: 7px;
+  box-shadow: 0px 0.2px 0.2px hsl(0deg 0% 0% / 1.0),
+  0px 0.3px 0.2px -0.5px hsl(0deg 0% 0% / 0.68),
+  0px 0.5px 0.4px -1.1px hsl(0deg 0% 0% / 0.62),
+  0px 1px 0.8px -1.6px hsl(0deg 0% 0% / 0.56),
+  -0.1px 2px 1.6px -2.1px hsl(0deg 0% 0% / 0.50),
+  -0.1px 3.6px 2.8px -2.6px hsl(0deg 0% 0% / 0.44),
+  -0.2px 6px 4.7px -3.2px hsl(0deg 0% 0% / 0.38),
+  -0.3px 9.3px 7.3px -3.7px hsl(0deg 0% 0% / 0.32),
+  -0.4px 13.8px 10.9px -4.2px hsl(0deg 0% 0% / 0.29),
+  -0.6px 19.4px 15.3px -4.7px hsl(0deg 0% 0% / 0.2);
+}
+
+.inline-nudgebox-main {
+  background: var(--theme-tabs-active-background, #3c3c3c);
+  border: 0px solid var(--theme-input-border, #565656);
+  border-radius: 0px;
+  padding: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  min-width: 100px;
+  padding-right: 14px;
+}
+
+.inline-nudgebox-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--theme-input-foreground, #ffffff);
+  font-family: inherit;
+  font-size: inherit;
+  width: 100%;
+  text-align: center;
+  padding: 2px 4px;
+  height: 20px;
+}
+
+/* 数値入力の上下矢印ボタンを表示 */
+.inline-nudgebox-input::-webkit-outer-spin-button,
+.inline-nudgebox-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+  opacity: 1;
+  display: none;
+  width: 0px;
+  background: var(--theme-button-background, #4a4a4a);
+  border: 0px solid var(--theme-button-border, #606060);
+  border-radius: 0px;
+  cursor: pointer;
+}
+
+.inline-nudgebox-input::-webkit-inner-spin-button:hover,
+.inline-nudgebox-input::-webkit-outer-spin-button:hover {
+  background: var(--theme-button-hover, #5a5a5a);
+}
+
+/* Firefox用の矢印ボタン */
+.inline-nudgebox-input[type="number"] {
+  -moz-appearance: textfield;
+  position: relative;
+}
+
+.inline-nudgebox-input::before,
+.inline-nudgebox-input::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  width: 0;
+  height: 0;
+  cursor: pointer;
+}
+
+.inline-nudgebox-input::before {
+  top: 2px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 4px solid var(--theme-input-foreground, #ffffff);
+}
+
+.inline-nudgebox-input::after {
+  bottom: 2px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid var(--theme-input-foreground, #ffffff);
+}
+
+/* フキダシの矢印（左向き45度回転した四角形） */
+.inline-nudgebox-arrow {
+  position: absolute;
+  top: 50%;
+  left: -4px;
+  transform: translateY(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--theme-tabs-active-background, #3c3c3c);
+  border: 0px solid var(--theme-input-border, #565656);
+  z-index: 999;
+}
+
+/* フォーカス時のスタイル */
+.inline-nudgebox-input:focus {
+  background: var(--theme-ui-background, #404040);
+}
+
+.inline-nudgebox-input::selection {
+  background: var(--theme-ui-background-bright, #404040);
+}
+
+.inline-nudgebox-main:focus-within {
+  border-color: var(--theme-tabs-active-background, #007acc);
+  box-shadow: 0 0 0 1px var(--theme-tabs-active-background, #007acc);
+}
+
+/* アニメーション */
+.inline-nudgebox-container {
+  animation: nudgeboxFadeIn 0.1s ease-out;
+}
+
+@keyframes nudgeboxFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

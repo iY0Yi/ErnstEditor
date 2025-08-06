@@ -50,6 +50,8 @@ const createWindow = (): void => {
     width: 1200,
     height: 800,
     frame: false, // ネイティブヘッダー（タイトルバー）を隠す
+    backgroundColor: '#101010', // 読み込み中の背景色
+    show: false, // 準備完了まで非表示
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -58,7 +60,16 @@ const createWindow = (): void => {
   });
 
   mainWindow.loadFile('src/index.html');
-  mainWindow.webContents.openDevTools();
+
+  // 開発環境でのみ開発者ツールを開く
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools();
+  }
+
+  // ページ読み込み完了後にウィンドウを表示
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
 };
 
 // ファイル操作のIPC処理
