@@ -4,31 +4,26 @@ import { generateId } from '../utils/idUtils';
 import { getLanguageFromFileName } from '../components/language';
 
 export function useTabManager(monaco?: any) {
-  // タブ管理
-  const [tabs, setTabs] = React.useState<FileTab[]>([
-    {
-      id: generateId(),
-      fileName: 'Untitled.glsl',
-      filePath: null,
-      content: '',
-      language: 'glsl',
-      isModified: false
-    }
-  ]);
+  // タブ管理（初期は空のタブリスト）
+  const [tabs, setTabs] = React.useState<FileTab[]>([]);
 
-  const [activeTabId, setActiveTabId] = React.useState<string>(tabs[0].id);
+  const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
 
   // ドラッグアンドドロップ状態管理
   const [draggedTabId, setDraggedTabId] = React.useState<string | null>(null);
 
   // アクティブなタブを取得
-  const activeTab = tabs.find(tab => tab.id === activeTabId) || tabs[0];
+  const activeTab = activeTabId ? tabs.find(tab => tab.id === activeTabId) : null;
 
   // ウィンドウタイトル更新
   React.useEffect(() => {
-    const title = `${activeTab.fileName}${activeTab.isModified ? ' *' : ''} - Ernst Editor`;
-    document.title = title;
-  }, [activeTab.fileName, activeTab.isModified]);
+    if (activeTab) {
+      const title = `${activeTab.fileName}${activeTab.isModified ? ' *' : ''} - Ernst Editor`;
+      document.title = title;
+    } else {
+      document.title = 'Ernst Editor';
+    }
+  }, [activeTab]);
 
   // タブ操作関数
   const updateTab = (tabId: string, updates: Partial<FileTab>) => {
@@ -41,10 +36,21 @@ export function useTabManager(monaco?: any) {
 
   // モデル管理関数
   const createModel = React.useCallback((content: string, language: string, uri?: string): any => {
-    if (!monaco) return null;
+    if (!monaco) {
+      // console.log('⚠️ TabManager: Monaco not available, returning null model');
+      return null;
+    }
 
-    const uriObj = uri ? monaco.Uri.parse(uri) : monaco.Uri.parse(`file:///model-${generateId()}.${language}`);
-    return monaco.editor.createModel(content, language, uriObj);
+    try {
+      const uriObj = uri ? monaco.Uri.parse(uri) : monaco.Uri.parse(`file:///model-${generateId()}.${language}`);
+      // console.log('📋 TabManager: Creating Monaco model with URI:', uriObj.toString());
+      const model = monaco.editor.createModel(content, language, uriObj);
+      // console.log('✅ TabManager: Monaco model created successfully');
+      return model;
+    } catch (error) {
+      console.error('❌ TabManager: Error creating Monaco model:', error);
+      return null;
+    }
   }, [monaco]);
 
   const disposeModel = React.useCallback((model: any) => {
@@ -87,21 +93,42 @@ export function useTabManager(monaco?: any) {
   };
 
   const addTab = (newTab: FileTab) => {
-    // 既に同じファイルが開かれているかチェック
-    if (newTab.filePath) {
-      const existingTab = tabs.find(tab => tab.filePath === newTab.filePath);
-      if (existingTab) {
-        setActiveTabId(existingTab.id);
-        return;
-      }
-    }
+    // console.log('📋 TabManager: Adding new tab:', newTab.fileName);
 
-    // モデルを作成してタブに追加
-    const model = createModel(newTab.content, newTab.language, newTab.filePath || undefined);
-    const tabWithModel = { ...newTab, model };
-    setTabs(prevTabs => [...prevTabs, tabWithModel]);
-    // 新しいタブをアクティブに設定
-    setActiveTabId(tabWithModel.id);
+    try {
+      // 既に同じファイルが開かれているかチェック
+      if (newTab.filePath) {
+        const existingTab = tabs.find(tab => tab.filePath === newTab.filePath);
+        if (existingTab) {
+          // console.log('📋 TabManager: File already open, switching to existing tab');
+          setActiveTabId(existingTab.id);
+          return;
+        }
+      }
+
+      // モデルを作成してタブに追加
+      // console.log('📋 TabManager: Creating model...');
+      const model = createModel(newTab.content, newTab.language, newTab.filePath || undefined);
+      // console.log('📋 TabManager: Model created:', !!model);
+
+      const tabWithModel = { ...newTab, model };
+      setTabs(prevTabs => {
+        // console.log('📋 TabManager: Adding tab to state...');
+        return [...prevTabs, tabWithModel];
+      });
+
+      // 新しいタブをアクティブに設定
+      // console.log('📋 TabManager: Setting tab as active...');
+      setActiveTabId(tabWithModel.id);
+      // console.log('✅ TabManager: Tab added successfully');
+
+    } catch (error) {
+      console.error('❌ TabManager: Error adding tab:', error);
+      // エラーが発生してもタブは追加する（モデルなしで）
+      const tabWithoutModel = { ...newTab, model: null };
+      setTabs(prevTabs => [...prevTabs, tabWithoutModel]);
+      setActiveTabId(tabWithoutModel.id);
+    }
   };
 
   const closeTab = (tabId: string) => {
@@ -117,20 +144,10 @@ export function useTabManager(monaco?: any) {
       }
 
       if (tabs.length === 1) {
-        // 最後のタブの場合は新しいタブを作成
-        const newTab: FileTab = {
-          id: generateId(),
-          fileName: 'Untitled.glsl',
-          filePath: null,
-          content: '',
-          language: 'glsl',
-          isModified: false
-        };
-        const model = createModel(newTab.content, newTab.language);
-        const newTabWithModel = { ...newTab, model };
-        setTabs([newTabWithModel]);
-        setActiveTabId(newTabWithModel.id);
-      } else {
+        // 最後のタブの場合はタブ配列を空にしてウェルカムスクリーンを表示
+        setTabs([]);
+        setActiveTabId(null);
+    } else {
         const newTabs = tabs.filter(tab => tab.id !== tabId);
         setTabs(newTabs);
 
@@ -203,8 +220,8 @@ export function useTabManager(monaco?: any) {
       prevTabs.map(tab => {
         if (tab.filePath === oldPath) {
           return {
-            ...tab,
-            filePath: newPath,
+              ...tab,
+              filePath: newPath,
             fileName: newFileName
           };
         }

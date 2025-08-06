@@ -60,8 +60,8 @@ export class SliderUI implements monaco.editor.IContentWidget {
    * スライダーコンテナを作成
    */
   private createSliderContainer(): HTMLElement {
-    const container = document.createElement('div');
-    container.className = 'inline_1f-container';
+  const container = document.createElement('div');
+  container.className = 'inline_1f-container';
     // Monaco Editorウィジェットに必要な最小限のスタイルのみ
     container.style.position = 'absolute';
     container.style.display = 'none';

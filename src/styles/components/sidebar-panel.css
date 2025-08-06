@@ -1,0 +1,59 @@
+/* ===== Ernst Editor - Sidebar Panel Styles ===== */
+
+/* サイドバーパネルコンテナ */
+.sidebar-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--theme-sidebar-background, #1e1e1e);
+  border-right: 1px solid var(--theme-ui-background-dark, #000000);
+}
+
+/* タブヘッダー（アイコン表示） */
+.sidebar-tab-header {
+  display: flex;
+  background: var(--theme-sidebar-background, #1e1e1e);
+  min-height: 35px;
+}
+
+/* タブボタン（ベース） */
+.sidebar-tab-button {
+  flex: 1;
+  height: 35px;
+  background: transparent;
+  border: none;
+  color: var(--theme-sidebar-foreground, #cccccc);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* アクティブタブボタン */
+.sidebar-tab-button.active {
+  background: var(--theme-ui-background-bright, #2d2d2d);
+  color: var(--theme-ui-foreground-bright, #ffffff);
+}
+
+/* タブボタンホバー（非アクティブ時） */
+.sidebar-tab-button:not(.active):hover {
+  background: var(--theme-ui-background-bright, #2a2a2a);
+}
+
+/* パネルコンテンツエリア */
+.sidebar-panel-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* パネル（FileExplorer / SearchPanel） */
+.sidebar-panel-item {
+  height: 100%;
+}
+
+/* 非アクティブパネルを隠す */
+.sidebar-panel-item.hidden {
+  display: none;
+}

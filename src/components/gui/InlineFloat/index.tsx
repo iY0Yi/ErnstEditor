@@ -542,7 +542,7 @@ export class InlineFloatManager {
               isModified: false
             });
           }
-        } else {
+          } else {
           console.error('❌ Failed to save new file. Result details:', {
             result: result,
             hasResult: !!result,
@@ -576,7 +576,7 @@ export class InlineFloatManager {
             content: content
           });
         }
-      } else {
+            } else {
         console.error('❌ Failed to save file:', result.error);
       }
     } catch (error) {

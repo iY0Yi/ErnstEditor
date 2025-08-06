@@ -1,0 +1,76 @@
+/* ===== Ernst Editor - Tab Manager Styles ===== */
+
+/* タブバーコンテナ */
+.tab-bar {
+  background: var(--theme-tabs-background, #1e1e1e);
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 35px;
+}
+
+/* タブバーのスクロールバーを隠す */
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 個別タブ */
+.tab-item {
+  display: flex;
+  align-items: center;
+  background: var(--theme-tabs-background, #1e1e1e);
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--theme-tabs-foreground, #666666);
+  min-width: 120px;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+/* アクティブタブ */
+.tab-item.active {
+  background: var(--theme-tabs-active-background, #2d2d2d);
+  color: var(--theme-tabs-active-foreground, #cccccc);
+}
+
+/* ドラッグ中のタブ */
+.tab-item.dragging {
+  cursor: grabbing;
+  opacity: 0.5;
+}
+
+/* タブのファイル名テキスト */
+.tab-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* タブ閉じるボタン */
+.tab-close-button {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 16px;
+  margin-left: 8px;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.tab-close-button:hover {
+  color: #fff;
+}

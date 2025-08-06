@@ -3,13 +3,14 @@
  *
  * 機能:
  * - Alt+X で数値入力ボックスを起動
- * - +u_float1f の位置にフキダシ風デザインの数値ボックスを表示
+ * - +u_inline1f の位置にフキダシ風デザインの数値ボックスを表示
  * - Enter で値確定、ESC でキャンセル
  * - 上限下限なしの自由な数値入力
  */
 
 import * as monaco from 'monaco-editor';
 import { FloatDetector } from '../InlineFloat/markerUtils';
+// import { blenderService } from '../../../services/blenderService'; // レンダラープロセス内のインスタンスは使用しない
 
 interface FloatMatch {
   value: number;
@@ -23,6 +24,7 @@ interface NudgeboxOptions {
   range: monaco.IRange;
   onConfirm: (value: number) => void;
   onCancel: () => void;
+  onValueChange?: (value: number) => void; // リアルタイム値変更時のコールバック
 }
 
 class NudgeboxWidget implements monaco.editor.IContentWidget {
@@ -81,6 +83,14 @@ class NudgeboxWidget implements monaco.editor.IContentWidget {
       }
     });
 
+    // 数値入力の変更をリアルタイムで監視
+    this.numberInput.addEventListener('input', () => {
+      const value = parseFloat(this.numberInput.value);
+      if (!isNaN(value) && this.options.onValueChange) {
+        this.options.onValueChange(value);
+      }
+    });
+
     // 外側クリックでは閉じない（EnterとESCのみで操作）
     // この仕様により、ユーザーは意図的にEnter/ESCで操作する必要がある
   }
@@ -103,22 +113,22 @@ class NudgeboxWidget implements monaco.editor.IContentWidget {
   /**
    * 矢印キーによる精度制御ステップ処理
    * スライダーと同じ仕様:
-   * - Ctrl+矢印: 1/10精度 (0.1)
-   * - Shift+矢印: 1/100精度 (0.01)
-   * - Alt+矢印: 1/1000精度 (0.001)
-   * - 修飾キーなし: 1.0
+   * - 修飾キーなし: 第1小数点 (0.1)
+   * - Ctrl+矢印: 1/100精度 (0.01)
+   * - Shift+矢印: 1/1000精度 (0.001)
+   * - Alt+矢印: 1/10000精度 (0.0001)
    */
   private handleArrowKeyStep(e: KeyboardEvent): void {
     const currentValue = parseFloat(this.numberInput.value) || 0;
-    let stepSize = 1; // デフォルトステップサイズ
+    let stepSize = 0.1; // デフォルトステップサイズ（第1小数点）
 
     // 修飾キーによる精度制御
     if (e.ctrlKey) {
-      stepSize = 0.1; // Ctrl+矢印: 1/10精度
+      stepSize = 0.01; // Ctrl+矢印: 1/100精度
     } else if (e.shiftKey) {
-      stepSize = 0.01; // Shift+矢印: 1/100精度
+      stepSize = 0.001; // Shift+矢印: 1/1000精度
     } else if (e.altKey) {
-      stepSize = 0.001; // Alt+矢印: 1/1000精度
+      stepSize = 0.0001; // Alt+矢印: 1/10000精度
     }
 
     // 上下キーによる増減
@@ -131,6 +141,11 @@ class NudgeboxWidget implements monaco.editor.IContentWidget {
 
     // 値を更新（上限下限なし）
     this.numberInput.value = newValue.toString();
+
+    // リアルタイムでBlenderに送信
+    if (this.options.onValueChange) {
+      this.options.onValueChange(newValue);
+    }
   }
 
   /**
@@ -141,14 +156,19 @@ class NudgeboxWidget implements monaco.editor.IContentWidget {
     if (stepSize >= 0.1) return 1;
     if (stepSize >= 0.01) return 2;
     if (stepSize >= 0.001) return 3;
-    return 4;
+    if (stepSize >= 0.0001) return 4;
+    return 5;
   }
 
   public focus(): void {
     setTimeout(() => {
-      this.numberInput.focus();
-      this.numberInput.select();
-    }, 0);
+      if (this.numberInput) {
+        this.numberInput.focus();
+        this.numberInput.select();
+      } else {
+        console.warn('⚠️ Nudgebox input element not found');
+      }
+    }, 50); // 少し長めに待つ
   }
 
   public dispose(): void {
@@ -200,7 +220,7 @@ export class InlineNudgeboxManager {
   public integrate(editor: monaco.editor.IStandaloneCodeEditor): void {
     this.editor = editor;
     this.setupKeyBindings();
-    console.log('✅ InlineNudgeboxManager integrated');
+    // console.log('✅ InlineNudgeboxManager integrated');
   }
 
   private setupKeyBindings(): void {
@@ -227,7 +247,7 @@ export class InlineNudgeboxManager {
     if (floatMatch) {
       this.showNudgebox(floatMatch);
     } else {
-      console.log('⚠️ No float number found at cursor position or selection');
+      // console.log('⚠️ No float number found at cursor position or selection');
     }
   }
 
@@ -256,27 +276,22 @@ export class InlineNudgeboxManager {
   private showNudgebox(floatMatch: FloatMatch): void {
     this.currentMatch = floatMatch;
 
-    // +u_float1f を追加（半角スペース2つ + +u_float1f）
+    // 数値を "u_inline1f" で一時置換
     const model = this.editor.getModel();
     if (!model) return;
 
-    const suffix = '  +u_float1f';  // 半角スペース2つ追加
+    const placeholder = 'u_inline1f';
     model.pushEditOperations([], [{
-      range: new monaco.Range(
-        floatMatch.range.endLineNumber,
-        floatMatch.range.endColumn,
-        floatMatch.range.endLineNumber,
-        floatMatch.range.endColumn
-      ),
-      text: suffix
+      range: floatMatch.range,
+      text: placeholder
     }], () => null);
 
-    // 編集後の範囲を再計算（+u_float1f を含む）
+    // 置換後の範囲を保存（u_inline1fの範囲）
     this.originalRange = new monaco.Range(
       floatMatch.range.startLineNumber,
       floatMatch.range.startColumn,
       floatMatch.range.endLineNumber,
-      floatMatch.range.endColumn + suffix.length
+      floatMatch.range.startColumn + placeholder.length
     );
 
     // Nudgeboxウィジェットを作成
@@ -284,20 +299,26 @@ export class InlineNudgeboxManager {
       value: floatMatch.value,
       range: floatMatch.range,  // 元の数値の範囲
       onConfirm: (value) => this.handleConfirm(value),
-      onCancel: () => this.handleCancel()
+      onCancel: () => this.handleCancel(),
+      onValueChange: (value) => this.handleValueChange(value)
     });
 
-    // 元の数値の位置に配置（+u_float1fを隠すため）
+    // 元の数値の位置に配置（+u_inline1fを隠すため）
     this.widget.setPosition(floatMatch.range);
     this.editor.addContentWidget(this.widget);
 
-    // フォーカス
-    this.widget.focus();
+    // フォーカス（DOMが準備できるまで少し待つ）
+    setTimeout(() => {
+      this.widget.focus();
+    }, 10);
+
+    // 初期値をBlenderに送信
+    this.sendValueToBlender(floatMatch.value);
 
     // ファイル保存
     this.saveCurrentFile();
 
-    console.log('📦 Nudgebox activated for value:', floatMatch.value);
+    // console.log('📦 Nudgebox activated for value:', floatMatch.value);
   }
 
   private async handleConfirm(value: number): Promise<void> {
@@ -316,8 +337,12 @@ export class InlineNudgeboxManager {
           text: newText
         }], () => null);
 
+        // Blenderに新しい値を送信（確定時はコメントアウト - リアルタイム送信で既に送信済み）
+        // console.log('🎛️ Nudgebox sending value to Blender:', value);
+        // await this.sendValueToBlender(value); // 確定時は追加送信不要
+
         await this.saveCurrentFile();
-        console.log('✅ Nudgebox value confirmed:', value);
+        // console.log('✅ Nudgebox value confirmed and sent to Blender:', value);
       }
     }
     this.hideNudgebox();
@@ -333,8 +358,10 @@ export class InlineNudgeboxManager {
           text: this.currentMatch.text
         }], () => null);
 
+        // Blenderに元の値を送信（復旧）
+        await this.sendValueToBlender(this.currentMatch.value);
+
         await this.saveCurrentFile();
-        console.log('❌ Nudgebox cancelled, reverted to:', this.currentMatch.text);
       }
     }
     this.hideNudgebox();
@@ -350,6 +377,32 @@ export class InlineNudgeboxManager {
     this.originalRange = null;
   }
 
+  /**
+   * 値変更時のリアルタイム処理
+   */
+  private handleValueChange(value: number): void {
+    this.sendValueToBlender(value);
+  }
+
+  /**
+   * BlenderにUniform値を送信
+   */
+    private async sendValueToBlender(value: number): Promise<void> {
+        try {
+      // IPC経由でメインプロセスのblenderServiceを使用
+      if (window.electronAPI && (window.electronAPI as any).sendTestValueToBlender) {
+        const result = await (window.electronAPI as any).sendTestValueToBlender(value);
+        if (!result.success) {
+          console.error('❌ Nudgebox: Failed to send via IPC:', result.error);
+        }
+      } else {
+        console.error('❌ Nudgebox: IPC API not available');
+      }
+    } catch (error) {
+      console.error('❌ Nudgebox: Error sending value via IPC:', error);
+    }
+  }
+
   private async saveCurrentFile(): Promise<void> {
     try {
       const activeTab = this.getActiveTabCallback();
@@ -362,12 +415,12 @@ export class InlineNudgeboxManager {
             content,
             isModified: false
           });
-          console.log('💾 File saved automatically');
+          // console.log('💾 File saved automatically');
         } else {
           console.error('❌ Failed to save file:', result.error);
         }
       } else {
-        console.log('⚠️ No active tab or file path for saving');
+        // console.log('⚠️ No active tab or file path for saving');
       }
     } catch (error) {
       console.error('❌ Error saving file:', error);
@@ -376,7 +429,7 @@ export class InlineNudgeboxManager {
 
   public dispose(): void {
     this.hideNudgebox();
-    console.log('🧹 InlineNudgeboxManager disposed');
+    // console.log('🧹 InlineNudgeboxManager disposed');
   }
 }
 

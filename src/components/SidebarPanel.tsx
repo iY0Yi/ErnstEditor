@@ -13,6 +13,7 @@ interface SidebarPanelProps {
   onRefreshFileTreeCallback?: (callback: () => void) => void;
   onFileRenamed?: (oldPath: string, newPath: string) => void;
   onFileDeleted?: (filePath: string) => void;
+  externalProjectRoot?: string | null; // 外部からプロジェクトルートを設定
 }
 
 const SidebarPanel: React.FC<SidebarPanelProps> = ({
@@ -22,10 +23,20 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
   onProjectRootChange,
   onRefreshFileTreeCallback,
   onFileRenamed,
-  onFileDeleted
+  onFileDeleted,
+  externalProjectRoot
 }) => {
   const [activePanel, setActivePanel] = React.useState<PanelType>('files');
   const [projectRoot, setProjectRoot] = React.useState<string | null>(null);
+
+  // 外部からのプロジェクトルート設定を処理
+  React.useEffect(() => {
+    if (externalProjectRoot && externalProjectRoot !== projectRoot) {
+      console.log('📁 SidebarPanel: Setting external project root:', externalProjectRoot);
+      setProjectRoot(externalProjectRoot);
+      onProjectRootChange?.(externalProjectRoot);
+    }
+  }, [externalProjectRoot, projectRoot, onProjectRootChange]);
 
     // projectRootを更新するハンドラー
   const handleProjectRootChange = React.useCallback((root: string | null) => {
@@ -34,79 +45,19 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
   }, [onProjectRootChange]);
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      background: 'var(--theme-sidebar-background, #1e1e1e)',
-      borderRight: `1px solid var(--theme-ui-background-dark, #000000)`
-    }}>
+    <div className="sidebar-panel">
                   {/* タブヘッダー（アイコン表示） */}
-      <div style={{
-        display: 'flex',
-        background: 'var(--theme-sidebar-background, #1e1e1e)',
-        minHeight: '35px'
-      }}>
+      <div className="sidebar-tab-header">
         <button
           onClick={() => setActivePanel('files')}
-          style={{
-            flex: 1,
-            height: '35px',
-            background: activePanel === 'files'
-              ? 'var(--theme-ui-background-bright, #2d2d2d)'
-              : 'transparent',
-            border: 'none',
-            color: activePanel === 'files'
-              ? 'var(--theme-ui-foreground-bright, #ffffff)'
-              : 'var(--theme-sidebar-foreground, #cccccc)',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          onMouseEnter={(e) => {
-            if (activePanel !== 'files') {
-              e.currentTarget.style.background = 'var(--theme-ui-background-bright, #2a2a2a)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activePanel !== 'files') {
-              e.currentTarget.style.background = 'transparent';
-            }
-          }}
+          className={`sidebar-tab-button ${activePanel === 'files' ? 'active' : ''}`}
           title="Files"
         >
           <MaterialIcon name="folder" size={16} />
         </button>
         <button
           onClick={() => setActivePanel('search')}
-          style={{
-            flex: 1,
-            height: '35px',
-            background: activePanel === 'search'
-              ? 'var(--theme-ui-background-bright, #2d2d2d)'
-              : 'transparent',
-            border: 'none',
-            color: activePanel === 'search'
-              ? 'var(--theme-ui-foreground-bright, #ffffff)'
-              : 'var(--theme-sidebar-foreground, #cccccc)',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          onMouseEnter={(e) => {
-            if (activePanel !== 'search') {
-              e.currentTarget.style.background = 'var(--theme-ui-background-bright, #2a2a2a)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activePanel !== 'search') {
-              e.currentTarget.style.background = 'transparent';
-            }
-          }}
+          className={`sidebar-tab-button ${activePanel === 'search' ? 'active' : ''}`}
           title="Search"
         >
           <MaterialIcon name="search" size={16} />
@@ -114,16 +65,9 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
       </div>
 
       {/* パネルコンテンツ */}
-      <div style={{
-        flex: 1,
-        overflow: 'hidden',
-        position: 'relative'
-      }}>
+      <div className="sidebar-panel-content">
         {/* FileExplorer - 状態保持のため常にレンダリング */}
-        <div style={{
-          display: activePanel === 'files' ? 'block' : 'none',
-          height: '100%'
-        }}>
+        <div className={`sidebar-panel-item ${activePanel !== 'files' ? 'hidden' : ''}`}>
                       <FileExplorer
               onFileSelect={onFileSelect}
               activeFilePath={activeFilePath}
@@ -131,14 +75,12 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
               onRefreshFileTreeCallback={onRefreshFileTreeCallback}
               onFileRenamed={onFileRenamed}
               onFileDeleted={onFileDeleted}
+              externalProjectRoot={projectRoot}
             />
         </div>
 
         {/* SearchPanel - 状態保持のため常にレンダリング */}
-        <div style={{
-          display: activePanel === 'search' ? 'block' : 'none',
-          height: '100%'
-        }}>
+        <div className={`sidebar-panel-item ${activePanel !== 'search' ? 'hidden' : ''}`}>
           <SearchPanel
             onSearchResult={onSearchResult}
             projectRoot={projectRoot}

@@ -26,9 +26,10 @@ interface FileExplorerProps {
   onRefreshFileTreeCallback?: (callback: () => void) => void;
   onFileRenamed?: (oldPath: string, newPath: string) => void;
   onFileDeleted?: (filePath: string) => void;
+  externalProjectRoot?: string | null; // 外部からプロジェクトルートを設定
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePath, onProjectRootChange, onRefreshFileTreeCallback, onFileRenamed, onFileDeleted }) => {
+const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePath, onProjectRootChange, onRefreshFileTreeCallback, onFileRenamed, onFileDeleted, externalProjectRoot }) => {
   const [files, setFiles] = React.useState<FileItem[]>([]);
   const [contextMenu, setContextMenu] = React.useState<ContextMenuPosition | null>(null);
   const [draggedItem, setDraggedItem] = React.useState<FileItem | null>(null);
@@ -47,6 +48,34 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
       }
     }
   };
+
+  // 指定されたディレクトリを読み込む
+  const loadProjectDirectory = async (directoryPath: string) => {
+    console.log('FileExplorer: Loading project directory:', directoryPath);
+    if (window.electronAPI && 'refreshFolder' in window.electronAPI) {
+      try {
+        const result = await (window.electronAPI as any).refreshFolder(directoryPath);
+        if (result) {
+          console.log('FileExplorer: Directory loaded successfully');
+          setFiles(result.files);
+          setProjectRoot(directoryPath);
+          onProjectRootChange?.(directoryPath);
+        } else {
+          console.error('❌ FileExplorer: Failed to load directory');
+        }
+      } catch (error) {
+        console.error('❌ FileExplorer: Error loading directory:', error);
+      }
+    }
+  };
+
+  // 外部からのプロジェクトルート設定を処理
+  React.useEffect(() => {
+    if (externalProjectRoot && externalProjectRoot !== projectRoot) {
+      console.log('FileExplorer: External project root changed:', externalProjectRoot);
+      loadProjectDirectory(externalProjectRoot);
+    }
+  }, [externalProjectRoot, projectRoot]);
 
   // ファイルツリーアイテムのレンダリング
   const renderFileItem = (item: FileItem, depth: number = 0): React.ReactNode => {
@@ -138,6 +167,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
           style={{
             paddingLeft: `${depth * 16 + 8}px`,
           }}
+          className="file-item"
         >
                     {item.type === 'directory' && (
             <FileTypeIcon
@@ -161,16 +191,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
               onBlur={handleRenameCancel}
               onKeyDown={handleRenameKeyDown}
               autoFocus
-              style={{
-                background: 'var(--theme-input-background)',
-                color: 'var(--theme-input-foreground)',
-                border: '1px solid var(--theme-ui-background-dark)',
-                borderRadius: '2px',
-                padding: '2px 4px',
-                fontSize: '12px',
-                width: '100%',
-                maxWidth: '200px'
-              }}
+              className="file-rename-input"
             />
           ) : (
             <span className="file-name">{item.name}</span>
@@ -361,50 +382,13 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
 
   return (
     <>
-      {/* スクロールバー非表示CSS */}
-      <style>{`
-        .file-explorer::-webkit-scrollbar {
-          display: none;
-        }
-        .file-explorer {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-      `}</style>
-
-                        <div style={{
-                    width: '100%',
-                    height: '100%',
-                    background: 'var(--theme-sidebar-background, #1e1e1e)',
-                    borderRight: `1px solid var(--theme-sidebar-border, #404040)`,
-                    display: 'flex',
-                    flexDirection: 'column'
-                  }}>
+      <div className="file-explorer-main">
         {/* ヘッダー */}
         {!projectRoot && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            width: '100%',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            background: 'var(--theme-sidebar-background, #1e1e1e)',
-            zIndex: 10
-          }}>
+          <div className="file-explorer-open-overlay">
             <button
               onClick={openProjectFolder}
-              style={{
-                background: 'var(--theme-sidebar-border, #404040)',
-                border: `1px solid var(--theme-sidebar-border, #404040)`,
-                color: 'var(--theme-sidebar-foreground, #cccccc)',
-                padding: '8px 16px',
-                fontSize: '12px',
-                cursor: 'pointer',
-                borderRadius: '4px'
-              }}
+              className="file-explorer-open-button"
             >
               Open Folder
             </button>
@@ -412,75 +396,37 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
         )}
 
         {/* ファイルツリー */}
-        <div
-          className="file-explorer"
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: '4px 0'
-          }}
+        <div className="file-explorer-tree"
         >
           {files.length === 0 && projectRoot ? (
-            <div style={{
-              padding: '16px',
-              color: '#888',
-              fontSize: '12px',
-              textAlign: 'center'
-            }}>
+            <div className="file-explorer-empty-message">
               No files found
             </div>
           ) : (
             files.map(item => renderFileItem(item))
           )}
         </div>
+
       </div>
 
       {/* コンテキストメニュー */}
       {contextMenu && (
         <div
+          className="context-menu-overlay"
           style={{
-            position: 'fixed',
             left: contextMenu.x,
-            top: contextMenu.y,
-            background: '#2d2d2d',
-            border: '1px solid #404040',
-            borderRadius: '4px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            zIndex: 1000,
-            minWidth: '120px'
+            top: contextMenu.y
           }}
         >
           <button
             onClick={handleRename}
-            style={{
-              width: '100%',
-              background: 'transparent',
-              border: 'none',
-              color: 'white',
-              padding: '8px 12px',
-              fontSize: '13px',
-              cursor: 'pointer',
-              textAlign: 'left'
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#404040')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            className="context-menu-button"
           >
             Rename
           </button>
           <button
             onClick={handleDelete}
-            style={{
-              width: '100%',
-              background: 'transparent',
-              border: 'none',
-              color: '#ff6b6b',
-              padding: '8px 12px',
-              fontSize: '13px',
-              cursor: 'pointer',
-              textAlign: 'left'
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#404040')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            className="context-menu-button delete"
           >
             Delete
           </button>

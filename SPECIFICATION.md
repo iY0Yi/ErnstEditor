@@ -687,3 +687,22 @@ def draw_editor_connection_status(self, context):
         else:
             col.operator(ERNST_OT_connect.bl_idname, text="", icon='LINKED', emboss=False)
 ```
+
+
+## session.json
+```json
+{
+  "openTabs": [
+    {
+      "filePath": "C:\\Users\\atsuh\\Dropbox\\pworks\\BalloonFight\\track\\uber_scripts\\pmod\\pmod_assign_gcp_torso_chest.frag",
+      "isActive": false
+    },
+    {
+      "filePath": "C:\\Users\\atsuh\\Dropbox\\pworks\\BalloonFight\\track\\uber_scripts\\sdf3d\\inc_cliff.glsl",
+      "isActive": true
+    }
+  ],
+  "projectPath": "C:\\Users\\atsuh\\Dropbox\\pworks\\BalloonFight\\track",
+  "lastModified": 1754292613123
+}
+```

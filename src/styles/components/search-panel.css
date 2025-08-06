@@ -1,0 +1,309 @@
+/* ===== Ernst Editor - Search Panel Styles ===== */
+
+/* 検索パネルコンテナ */
+.search-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--theme-sidebar-background, #1e1e1e);
+  color: var(--theme-sidebar-foreground, #cccccc);
+}
+
+/* 検索入力エリア */
+.search-input-area {
+  padding: 12px;
+}
+
+/* 検索入力コンテナ */
+.search-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--theme-input-background, #2d2d2d);
+  overflow: hidden;
+}
+
+/* 検索アイコンコンテナ */
+.search-icon-container {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-input-placeholder, #999999);
+}
+
+/* 検索入力フィールド */
+.search-input-field {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--theme-input-foreground, #cccccc);
+  font-size: 13px;
+  padding: 8px 12px 8px 0;
+}
+
+.search-input-field::placeholder {
+  color: var(--theme-input-placeholder, #999999);
+}
+
+/* 検索ボタン */
+.search-button {
+  background: var(--theme-accent-color, #007acc);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.search-button:hover:not(:disabled) {
+  background: var(--theme-accent-hover, #1177dd);
+}
+
+.search-button:disabled {
+  background: var(--theme-input-border, #666666);
+  cursor: not-allowed;
+}
+
+/* ローディング状態 */
+.search-loading-container {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--theme-input-placeholder, #999999);
+  font-size: 12px;
+}
+
+/* 検索統計 */
+.search-stats {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--theme-ui-background-dark, #333333);
+  color: var(--theme-input-placeholder, #999999);
+  font-size: 11px;
+}
+
+/* 検索結果エリア */
+.search-results-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 検索結果ファイル */
+.search-result-file {
+  border-bottom: 1px solid var(--theme-ui-background-dark, #333333);
+}
+
+/* ファイル名ヘッダー */
+.search-file-header {
+  padding: 8px 12px;
+  background: var(--theme-ui-background-light, #252525);
+  color: var(--theme-ui-foreground, #cccccc);
+  font-weight: 500;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background-color 0.2s ease;
+}
+
+.search-file-header:hover {
+  background: var(--theme-ui-background-bright, #2a2a2a);
+}
+
+/* ファイル名 */
+.search-file-name {
+  color: var(--theme-accent-color, #007acc);
+  flex: 1;
+  margin-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* マッチ数バッジ */
+.search-match-count {
+  background: var(--theme-accent-color, #007acc);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* マッチリスト */
+.search-matches-list {
+  /* デフォルトでは非表示、JavaScript で制御 */
+}
+
+/* 個別マッチ */
+.search-match-item {
+  padding: 6px 12px 6px 24px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.15s ease;
+  background: transparent;
+}
+
+.search-match-item:hover {
+  background: var(--theme-ui-background-light, #252525);
+  border-left-color: var(--theme-accent-color, #007acc);
+}
+
+/* マッチ行番号 */
+.search-match-line {
+  color: var(--theme-input-placeholder, #999999);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+/* マッチ内容 */
+.search-match-content {
+  font-size: 12px;
+  color: var(--theme-sidebar-foreground, #cccccc);
+  white-space: pre-wrap;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ハイライト（検索語句） */
+.search-highlight {
+  background: var(--theme-search-highlight, #ff6600);
+  color: var(--theme-search-highlightText, #000000);
+  font-weight: bold;
+}
+
+/* 結果なしメッセージ */
+.search-no-results {
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--theme-input-placeholder, #999999);
+  font-size: 12px;
+}
+
+/* ローディングアイコンコンテナ */
+.search-loading-indicator {
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  color: var(--theme-input-foreground, #ffffff);
+}
+
+/* 検索統計表示 */
+.search-stats {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--theme-sidebar-foreground, #888888);
+}
+
+/* 検索結果リストコンテナ */
+.search-results-container {
+  flex: 1;
+  overflow: auto;
+}
+
+/* 結果なしメッセージ（No results found） */
+.search-no-results-message {
+  padding: 20px;
+  text-align: center;
+  color: var(--theme-sidebar-foreground, #888888);
+  font-size: 12px;
+}
+
+/* 検索結果アイテム */
+.search-result-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.search-result-item:hover {
+  background: var(--theme-sidebar-hoverBackground, #2a2a2a);
+}
+
+/* ファイル情報ヘッダー */
+.search-result-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+/* ファイルアイコンコンテナ */
+.search-file-icon-container {
+  margin-right: 6px;
+  color: var(--theme-sidebar-foreground, #cccccc);
+  display: flex;
+  align-items: center;
+}
+
+/* ファイル名 */
+.search-result-filename {
+  color: var(--theme-sidebar-foreground, #cccccc);
+  font-weight: 500;
+}
+
+/* 行番号・列番号 */
+.search-result-location {
+  margin-left: 6px;
+  color: var(--theme-sidebar-foreground, #888888);
+  font-size: 10px;
+}
+
+/* マッチテキスト */
+.search-result-text {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--theme-sidebar-foreground, #bbbbbb);
+  font-family: var(--theme-font-mono, "Overpass Mono", monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ローディングアニメーション */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+/* スクロールバー */
+.search-results-area::-webkit-scrollbar,
+.search-results-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.search-results-area::-webkit-scrollbar-track,
+.search-results-container::-webkit-scrollbar-track {
+  background: var(--theme-ui-background-dark, #1e1e1e);
+}
+
+.search-results-area::-webkit-scrollbar-thumb,
+.search-results-container::-webkit-scrollbar-thumb {
+  background: var(--theme-ui-background-light, #404040);
+  border-radius: 4px;
+}
+
+.search-results-area::-webkit-scrollbar-thumb:hover,
+.search-results-container::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-ui-background-bright, #555555);
+}
+
+/* Firefox用スクロールバー非表示 */
+.search-results-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}

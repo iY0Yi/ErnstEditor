@@ -26,8 +26,17 @@ interface ElectronAPI {
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<any[]>;
 
   // コマンドライン引数からのファイル開き用API
-  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string }) => void) => void;
+  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string; trackPath?: string | null }) => void) => void;
   removeFileOpenFromCLIListener: () => void;
+
+  // Blenderサーバー制御用API
+  forceStartBlenderServer: () => Promise<{ success: boolean; error?: string }>;
+  sendTestValueToBlender: (value: number) => Promise<{ success: boolean; error?: string }>;
+
+  // Blender接続状態API
+  getBlenderConnectionStatus: () => Promise<{ isServerRunning: boolean; isBlenderConnected: boolean; clientCount: number }>;
+  onBlenderConnectionChange: (callback: (connected: boolean) => void) => void;
+  removeBlenderConnectionListener: () => void;
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -61,5 +70,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeFileOpenFromCLIListener: () => {
     ipcRenderer.removeAllListeners('file:open-from-cli');
+  },
+
+  // Blenderサーバー制御用API
+  forceStartBlenderServer: () => ipcRenderer.invoke('blender:force-start-server'),
+  sendTestValueToBlender: (value: number) => ipcRenderer.invoke('blender:send-test-value', value),
+
+  // Blender接続状態API
+  getBlenderConnectionStatus: () => ipcRenderer.invoke('blender:get-connection-status'),
+  onBlenderConnectionChange: (callback: (connected: boolean) => void) => {
+    ipcRenderer.on('blender:connection-changed', (event, connected) => callback(connected));
+  },
+  removeBlenderConnectionListener: () => {
+    ipcRenderer.removeAllListeners('blender:connection-changed');
   }
 } as ElectronAPI);

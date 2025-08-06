@@ -4,27 +4,75 @@ import * as path from 'path';
 import { blenderService } from './services/blenderService';
 
 let mainWindow: BrowserWindow | null = null;
+let startupTimers: NodeJS.Timeout[] = []; // 起動時のタイマーを管理
 
-// コマンドライン引数からファイルパスを取得
-function getFilePathFromArgs(argv: string[]): string | null {
-  // 引数の例: ['electron', 'main.js', 'path/to/file.glsl']
-  // または: ['ErnstEditor.exe', 'path/to/file.glsl']
+// 親階層を辿って 'track' ディレクトリを検索
+function findTrackDirectory(startPath: string): string | null {
+  let currentPath = path.dirname(startPath);
 
-  const args = argv.slice(process.env.NODE_ENV === 'development' ? 2 : 1);
-
-  for (const arg of args) {
-    // ファイルパスかどうかをチェック（--で始まるオプションは除外）
-    if (!arg.startsWith('-') && fs.existsSync(arg)) {
-      return path.resolve(arg);
+  // ルートディレクトリに到達するまで親階層を辿る
+  while (currentPath !== path.dirname(currentPath)) {
+    const trackPath = path.join(currentPath, 'track');
+    if (fs.existsSync(trackPath) && fs.statSync(trackPath).isDirectory()) {
+      console.log(`Found track directory: ${trackPath}`);
+      return trackPath;
     }
+    currentPath = path.dirname(currentPath);
   }
 
   return null;
 }
 
+// コマンドライン引数からファイルパスを取得
+function getFilePathFromArgs(argv: string[]): { filePath: string; trackPath: string | null } | null {
+  // 引数の例: ['electron', 'main.js', '"path/to/file.glsl"']
+  // または: ['ErnstEditor.exe', '"path/to/file.glsl"']
+
+  console.log('🔍 All command line arguments:', argv);
+  console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
+
+  const args = argv.slice(process.env.NODE_ENV === 'development' ? 2 : 1);
+  console.log('🔍 Processed arguments:', args);
+
+  for (let i = 0; i < args.length; i++) {
+    let arg = args[i];
+    console.log(`🔍 Processing arg[${i}]: "${arg}"`);
+
+    // ダブルクォーテーションを除去
+    if (arg.startsWith('"') && arg.endsWith('"')) {
+      arg = arg.slice(1, -1);
+      console.log(`🔍 After quote removal: "${arg}"`);
+    }
+
+    // ファイルパスかどうかをチェック（--で始まるオプションは除外）
+    if (!arg.startsWith('-')) {
+      console.log(`🔍 Checking if file exists: "${arg}"`);
+      const exists = fs.existsSync(arg);
+      console.log(`🔍 File exists: ${exists}`);
+
+      if (exists) {
+        const resolvedPath = path.resolve(arg);
+        const trackPath = findTrackDirectory(resolvedPath);
+
+        console.log(`CLI file path: ${resolvedPath}`);
+        if (trackPath) {
+          console.log(`CLI track directory: ${trackPath}`);
+        }
+
+        return { filePath: resolvedPath, trackPath };
+      }
+    } else {
+      console.log(`🔍 Skipping option: "${arg}"`);
+    }
+  }
+
+  console.log('⚠️ No valid file path found in command line arguments');
+  return null;
+}
+
 // ファイルをレンダラープロセスで開くためのイベント送信
-function openFileInRenderer(filePath: string) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
+function openFileInRenderer(filePath: string, trackPath?: string | null) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
       const fileName = path.basename(filePath);
@@ -32,13 +80,19 @@ function openFileInRenderer(filePath: string) {
       mainWindow.webContents.send('file:open-from-cli', {
         filePath,
         content,
-        fileName
+        fileName,
+        trackPath: trackPath || null
       });
 
-      console.log(`📂 Opening file from command line: ${filePath}`);
+      console.log(`Opening file from command line: ${filePath}`);
+      if (trackPath) {
+        console.log(`Setting project root to track directory: ${trackPath}`);
+      }
     } catch (error) {
       console.error(`❌ Failed to open file from command line: ${error}`);
     }
+  } else {
+    console.log(`⚠️ Cannot open file: MainWindow is not available`);
   }
 }
 
@@ -336,6 +390,51 @@ ipcMain.handle('search:files', async (_, searchTerm: string, projectRoot?: strin
   }
 });
 
+// Blender接続状態のIPC処理
+ipcMain.handle('blender:get-connection-status', async (): Promise<{
+  isServerRunning: boolean;
+  isBlenderConnected: boolean;
+  clientCount: number;
+}> => {
+  try {
+    const status = blenderService.getConnectionStatus();
+    return status;
+  } catch (error) {
+    console.error('Error getting Blender connection status:', error);
+    return {
+      isServerRunning: false,
+      isBlenderConnected: false,
+      clientCount: 0
+    };
+  }
+});
+
+// Blender直接通信テスト用のIPC処理
+ipcMain.handle('blender:send-test-value', async (event: any, value: number): Promise<{
+  success: boolean;
+  error?: string;
+}> => {
+  try {
+    console.log(`🧪 IPC: Testing direct value send: ${value}`);
+
+    // 詳細な状態ログを出力
+    const status = blenderService.getConnectionStatus();
+    console.log('🔍 IPC: Current Blender status:', status);
+    console.log('🔍 IPC: isConnected():', blenderService.isConnected());
+
+    // 直接送信を試行
+    blenderService.sendUniformValue(value);
+
+    return { success: true };
+  } catch (error) {
+    console.error('❌ IPC: Error sending test value to Blender:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
 // ディレクトリ内を再帰的に検索する関数
 async function searchInDirectory(dirPath: string, searchTerm: string, results: any[]): Promise<void> {
   const ignorePatterns = [
@@ -370,23 +469,23 @@ async function searchInDirectory(dirPath: string, searchTerm: string, results: a
         const ext = path.extname(entry).toLowerCase();
         if (supportedExtensions.includes(ext)) {
           await searchInFile(fullPath, searchTerm, results);
+            }
+          }
         }
-      }
-    }
-  } catch (error) {
+      } catch (error) {
     // アクセス権限エラーなどは無視
     console.warn('Cannot access directory:', dirPath, error);
-  }
-}
+      }
+    }
 
 // ファイル内を検索する関数
 async function searchInFile(filePath: string, searchTerm: string, results: any[]): Promise<void> {
-  try {
+      try {
     const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
+        const lines = content.split('\n');
     const fileName = path.basename(filePath);
 
-    lines.forEach((line, lineIndex) => {
+        lines.forEach((line, lineIndex) => {
       const trimmedLine = line.trim();
       let searchIndex = 0;
 
@@ -434,9 +533,12 @@ if (!gotTheLock) {
       mainWindow.focus();
 
       // コマンドライン引数からファイルパスを取得して開く
-      const filePath = getFilePathFromArgs(commandLine);
-      if (filePath) {
-        openFileInRenderer(filePath);
+      console.log('🔍 Second instance command line:', commandLine);
+      const result = getFilePathFromArgs(commandLine);
+      if (result) {
+        openFileInRenderer(result.filePath, result.trackPath);
+      } else {
+        console.log('⚠️ No file found in second instance command line');
       }
     }
   });
@@ -446,24 +548,52 @@ app.whenReady().then(async () => {
   createWindow();
 
   // 起動時のコマンドライン引数をチェック
-  const filePath = getFilePathFromArgs(process.argv);
-  if (filePath) {
-    // ウィンドウが完全に読み込まれるまで少し待つ
-    setTimeout(() => {
-      openFileInRenderer(filePath);
-    }, 1000);
+  console.log('🔍 Startup command line check');
+  const result = getFilePathFromArgs(process.argv);
+  if (result) {
+    console.log('✅ File found in startup arguments, setting timer');
+    try {
+      // ウィンドウが完全に読み込まれるまで少し待つ
+      const timerId = setTimeout(() => {
+        console.log('⏰ Timer executed, opening file');
+        try {
+          openFileInRenderer(result.filePath, result.trackPath);
+        } catch (error) {
+          console.error('❌ Error opening file in renderer:', error);
+        }
+        // タイマー配列から削除
+        const index = startupTimers.indexOf(timerId);
+        if (index > -1) {
+          startupTimers.splice(index, 1);
+        }
+      }, 1000);
+      startupTimers.push(timerId);
+      console.log('📝 Timer set successfully');
+    } catch (error) {
+      console.error('❌ Error setting timer:', error);
+    }
+  } else {
+    console.log('⚠️ No file found in startup arguments');
   }
 
-  // Blender WebSocket サービスを開始（一時的に無効化）
-  console.log('⚠️ WebSocket Server temporarily disabled for testing');
-  /*
+  console.log('🔄 Proceeding to Blender Service startup...');
+
+  // Blender WebSocket サービスを開始
+  console.log('🚀 Starting Blender WebSocket Service...');
   try {
     await blenderService.start();
     console.log('✅ Ernst Editor WebSocket Server started on port 8765');
+
+    // Blender接続状態変更を監視してrendererに通知
+    blenderService.onConnectionChange((connected) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('blender:connection-changed', connected);
+        console.log('📡 Sent Blender connection status to renderer:', connected);
+      }
+    });
   } catch (error) {
     console.error('❌ Failed to start WebSocket Server:', error);
   }
-  */
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -472,18 +602,51 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('window-all-closed', async () => {
-  // Blender WebSocket サービスを停止（一時的に無効化）
-  /*
-  try {
-    await blenderService.stop();
-    console.log('🛑 Ernst Editor WebSocket Server stopped');
-  } catch (error) {
-    console.error('❌ Failed to stop WebSocket Server:', error);
-  }
-  */
+let isQuitting = false; // 終了処理中フラグ
 
+// アプリケーション終了前のクリーンアップ
+app.on('before-quit', async (event) => {
+  if (!isQuitting) {
+    isQuitting = true;
+    event.preventDefault(); // 一旦終了を止める
+
+    console.log('🧹 Starting cleanup process...');
+
+    // 実行中のタイマーをクリア
+    startupTimers.forEach(timerId => {
+      clearTimeout(timerId);
+    });
+    startupTimers = [];
+    console.log('🧹 Startup timers cleared');
+
+    // Blender WebSocket サービスを停止
+    try {
+      await blenderService.stop();
+      console.log('🛑 Ernst Editor WebSocket Server stopped');
+    } catch (error) {
+      console.error('❌ Failed to stop WebSocket Server:', error);
+    }
+
+    // mainWindowを明示的にクローズ
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.destroy();
+      mainWindow = null;
+    }
+
+    console.log('✅ Cleanup completed, quitting app');
+
+    // 少し待ってから最終的に終了
+    setTimeout(() => {
+      app.exit(0);
+    }, 100);
+  }
+});
+
+app.on('window-all-closed', () => {
+  // macOS以外では即座に終了
   if (process.platform !== 'darwin') {
-    app.quit();
+    if (!isQuitting) {
+      app.quit();
+    }
   }
 });

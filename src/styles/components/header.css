@@ -165,6 +165,7 @@
 }
 
 .connection-status.disconnected {
+  color: var(--theme-ui-background-light);
   background-color: var(--theme-ui-background-dark);
 }
 

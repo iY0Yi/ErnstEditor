@@ -38,8 +38,13 @@ export interface ElectronAPI {
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<SearchResult[]>;
 
   // コマンドライン引数からのファイル開き用API
-  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string }) => void) => void;
+  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string; trackPath?: string | null }) => void) => void;
   removeFileOpenFromCLIListener: () => void;
+
+  // Blender接続状態API
+  getBlenderConnectionStatus: () => Promise<{ isServerRunning: boolean; isBlenderConnected: boolean; clientCount: number }>;
+  onBlenderConnectionChange: (callback: (connected: boolean) => void) => void;
+  removeBlenderConnectionListener: () => void;
 }
 
 // グローバル型定義

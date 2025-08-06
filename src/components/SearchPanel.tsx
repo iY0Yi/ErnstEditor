@@ -86,11 +86,7 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
     return (
       <>
         {before}
-        <span style={{
-          background: 'var(--theme-search-highlight, #ff6600)',
-          color: 'var(--theme-search-highlightText, #000000)',
-          fontWeight: 'bold'
-        }}>
+        <span className="search-highlight">
           {match}
         </span>
         {after}
@@ -99,30 +95,11 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
   };
 
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      background: 'var(--theme-sidebar-background, #1e1e1e)',
-      color: 'var(--theme-sidebar-foreground, #cccccc)'
-    }}>
+    <div className="search-panel">
             {/* 検索入力エリア */}
-      <div style={{
-        padding: '12px'
-      }}>
-        <div style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          background: 'var(--theme-input-background, #2d2d2d)',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            marginLeft: '8px',
-            color: 'var(--theme-input-placeholder, #888888)',
-            display: 'flex',
-            alignItems: 'center'
-          }}>
+      <div className="search-input-area">
+        <div className="search-input-container">
+          <div className="search-icon-container">
             <MaterialIcon
               name="search"
               size={16}
@@ -134,23 +111,10 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
             placeholder="Search in files..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              flex: 1,
-              padding: '8px 12px 8px 8px',
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: 'var(--theme-input-foreground, #ffffff)',
-              fontSize: '13px'
-            }}
+            className="search-input-field"
           />
           {isSearching && (
-            <div style={{
-              marginRight: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              color: 'var(--theme-input-foreground, #ffffff)'
-            }}>
+            <div className="search-loading-indicator">
               <MaterialIcon
                 name="loading"
                 size={14}
@@ -162,39 +126,20 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
 
         {/* 検索統計 */}
         {searchTerm && (
-          <div style={{
-            marginTop: '8px',
-            fontSize: '11px',
-            color: 'var(--theme-sidebar-foreground, #888888)'
-          }}>
+          <div className="search-stats">
             {searchStats.matches} results in {searchStats.files} files
           </div>
         )}
       </div>
 
       {/* 検索結果リスト */}
-      <div style={{
-        flex: 1,
-        overflow: 'auto'
-      }}
-      className="search-results-list"
-      >
+      <div className="search-results-container">
         {!projectRoot ? (
-          <div style={{
-            padding: '20px',
-            textAlign: 'center',
-            color: 'var(--theme-sidebar-foreground, #888888)',
-            fontSize: '12px'
-          }}>
+          <div className="search-no-results">
             Open a folder to start searching
           </div>
         ) : results.length === 0 && searchTerm && !isSearching ? (
-          <div style={{
-            padding: '20px',
-            textAlign: 'center',
-            color: 'var(--theme-sidebar-foreground, #888888)',
-            fontSize: '12px'
-          }}>
+          <div className="search-no-results-message">
             No results found
           </div>
         ) : (
@@ -202,61 +147,26 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
             <div
               key={`${result.filePath}-${result.line}-${index}`}
               onClick={() => onSearchResult(result.filePath, result.line, result.column)}
-              style={{
-                padding: '8px 12px',
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--theme-sidebar-hoverBackground, #2a2a2a)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
+              className="search-result-item"
             >
               {/* ファイル名と行番号 */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: '4px',
-                fontSize: '11px'
-              }}>
-                <div style={{
-                  marginRight: '6px',
-                  color: 'var(--theme-sidebar-foreground, #cccccc)',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}>
+              <div className="search-result-header">
+                <div className="search-file-icon-container">
                   <MaterialIcon
                     name="description"
                     size={12}
                   />
                 </div>
-                <span style={{
-                  color: 'var(--theme-sidebar-foreground, #cccccc)',
-                  fontWeight: '500'
-                }}>
+                <span className="search-result-filename">
                   {truncateText(result.fileName, 25)}
                 </span>
-                <span style={{
-                  marginLeft: '6px',
-                  color: 'var(--theme-sidebar-foreground, #888888)',
-                  fontSize: '10px'
-                }}>
+                <span className="search-result-location">
                   :{result.line}:{result.column}
                 </span>
               </div>
 
               {/* マッチしたテキスト */}
-              <div style={{
-                fontSize: '12px',
-                lineHeight: '1.4',
-                color: 'var(--theme-sidebar-foreground, #bbbbbb)',
-                fontFamily: 'var(--theme-font-mono, "Overpass Mono", monospace)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}>
+              <div className="search-result-text">
                 {highlightMatch(
                   truncateText(result.lineText.trim(), 60),
                   Math.max(0, result.matchStart - result.lineText.indexOf(result.lineText.trim())),
@@ -268,25 +178,7 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
         )}
       </div>
 
-            <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
 
-        .loading-icon {
-          animation: spin 1s linear infinite;
-        }
-
-        .search-results-list::-webkit-scrollbar {
-          display: none;
-        }
-
-        .search-results-list {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-      `}</style>
     </div>
   );
 };

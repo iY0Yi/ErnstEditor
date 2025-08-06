@@ -25,6 +25,13 @@ export class BlenderService {
   async start(): Promise<void> {
     try {
       await webSocketServer.start();
+
+      // WebSocketサーバーの接続状態変更を監視
+      webSocketServer.onConnectionChange((connected) => {
+        console.log('🔗 WebSocket connection state changed:', connected);
+        this.notifyConnectionChange(connected);
+      });
+
       console.log('✅ Blender Service started successfully');
     } catch (error) {
       console.error('❌ Failed to start Blender Service:', error);
@@ -50,6 +57,14 @@ export class BlenderService {
    * @param value - 送信する浮動小数点値
    */
   sendUniformValue(value: number): void {
+    const status = this.getConnectionStatus();
+    console.log('🔍 sendUniformValue Debug:', {
+      isConnected: this.isConnected(),
+      isServerRunning: status.isServerRunning,
+      isBlenderConnected: status.isBlenderConnected,
+      clientCount: status.clientCount
+    });
+
     if (!this.isConnected()) {
       console.warn('⚠️ Cannot send uniform value: No Blender clients connected');
       return;
