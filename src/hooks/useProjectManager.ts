@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { PathUtils } from '../utils/pathUtils';
 
 export const useProjectManager = () => {
   const [projectName, setProjectName] = useState<string>('');
@@ -10,7 +11,7 @@ export const useProjectManager = () => {
 
     if (root) {
       // ルートフォルダ名を抽出してプロジェクト名として設定
-      const folderName = root.split(/[/\\]/).pop() || '';
+      const folderName = PathUtils.getDirectoryName(root);
       console.log('📁 ProjectManager: Setting project name to:', folderName);
       setProjectName(folderName);
       console.log('✅ ProjectManager: Project name set successfully');

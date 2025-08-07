@@ -2,6 +2,7 @@ import React from 'react';
 import { FileTab } from '../types';
 import { generateId } from '../utils/idUtils';
 import { getLanguageFromFileName } from '../components/language';
+import { PathUtils } from '../utils/pathUtils';
 
 export function useTabManager(monaco?: any) {
   // タブ管理（初期は空のタブリスト）
@@ -213,8 +214,7 @@ export function useTabManager(monaco?: any) {
 
   // ファイルパス変更時にタブ情報を更新（リネーム対応）
   const updateTabPath = (oldPath: string, newPath: string) => {
-    const pathParts = newPath.split(/[/\\]/);
-    const newFileName = pathParts[pathParts.length - 1];
+    const newFileName = PathUtils.getFileName(newPath);
 
     setTabs(prevTabs =>
       prevTabs.map(tab => {

@@ -37,6 +37,9 @@ interface ElectronAPI {
   getBlenderConnectionStatus: () => Promise<{ isServerRunning: boolean; isBlenderConnected: boolean; clientCount: number }>;
   onBlenderConnectionChange: (callback: (connected: boolean) => void) => void;
   removeBlenderConnectionListener: () => void;
+
+  // レンダラー準備完了通知API
+  notifyRendererReady: () => Promise<void>;
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -83,5 +86,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeBlenderConnectionListener: () => {
     ipcRenderer.removeAllListeners('blender:connection-changed');
-  }
+  },
+
+  // レンダラー準備完了通知API
+  notifyRendererReady: () => ipcRenderer.invoke('renderer:ready')
 } as ElectronAPI);

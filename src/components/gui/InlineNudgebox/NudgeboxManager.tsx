@@ -12,6 +12,7 @@ import {
   UNIFORM_NAME,
   IPC_CHANNELS
 } from './utils';
+import { sendValueToBlender } from '../../../utils/blenderUtils';
 
 /**
  * Inline Nudgebox システムのメイン管理クラス
@@ -113,7 +114,7 @@ export class InlineNudgeboxManager {
     }, 15); // 少し長めに遅延
 
     // 初期値をBlenderに送信
-    this.sendValueToBlender(floatMatch.value);
+    this.sendValueToBlenderInternal(floatMatch.value);
 
     // ファイル保存
     this.saveCurrentFile();
@@ -158,7 +159,7 @@ export class InlineNudgeboxManager {
         }], () => null);
 
         // Blenderに元の値を送信（復旧）
-        await this.sendValueToBlender(this.currentMatch.value);
+        await this.sendValueToBlenderInternal(this.currentMatch.value);
 
         await this.saveCurrentFile();
       }
@@ -183,25 +184,16 @@ export class InlineNudgeboxManager {
    * 値変更時のリアルタイム処理
    */
   private handleValueChange(value: number): void {
-    this.sendValueToBlender(value);
+    this.sendValueToBlenderInternal(value);
   }
 
   /**
-   * BlenderにUniform値を送信
+   * BlenderにUniform値を送信（共通ユーティリティを使用）
    */
-  private async sendValueToBlender(value: number): Promise<void> {
-    try {
-      // IPC経由でメインプロセスのblenderServiceを使用
-      if (window.electronAPI && (window.electronAPI as any).sendTestValueToBlender) {
-        const result = await (window.electronAPI as any).sendTestValueToBlender(value);
-        if (!result.success) {
-          console.error('❌ Nudgebox: Failed to send via IPC:', result.error);
-        }
-      } else {
-        console.error('❌ Nudgebox: IPC API not available');
-      }
-    } catch (error) {
-      console.error('❌ Nudgebox: Error sending value via IPC:', error);
+  private async sendValueToBlenderInternal(value: number): Promise<void> {
+    const success = await sendValueToBlender(value);
+    if (!success) {
+      console.error('❌ Nudgebox: Failed to send value to Blender');
     }
   }
 

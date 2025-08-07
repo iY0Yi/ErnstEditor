@@ -1,7 +1,7 @@
 import React from 'react';
 import { getLanguageFromFileName } from '../components/language';
-import { generateId } from '../utils/idUtils';
 import { FileTab } from '../types';
+import { createFileTabFromAPIResult, createFileTab } from '../utils/tabFactory';
 
 export function useFileOperations(
   activeTab: FileTab,
@@ -16,15 +16,7 @@ export function useFileOperations(
     if (window.electronAPI) {
       const result = await window.electronAPI.openFile();
       if (result) {
-        const language = getLanguageFromFileName(result.fileName);
-        const newTab: FileTab = {
-          id: generateId(),
-          fileName: result.fileName,
-          filePath: result.filePath,
-          content: result.content,
-          language: language,
-          isModified: false
-        };
+        const newTab = createFileTabFromAPIResult(result);
         addTab(newTab);
       }
     }
@@ -72,15 +64,7 @@ export function useFileOperations(
   };
 
   const handleFileSelect = (filePath: string, fileName: string, content: string) => {
-    const language = getLanguageFromFileName(fileName);
-    const newTab: FileTab = {
-      id: generateId(),
-      fileName: fileName,
-      filePath: filePath,
-      content: content,
-      language: language,
-      isModified: false
-    };
+    const newTab = createFileTab(filePath, content, fileName);
     addTab(newTab);
   };
 

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { FileTab } from '../types';
-import { getLanguageFromFileName } from '../components/language';
-import { generateId } from '../utils/idUtils';
+import { PathUtils } from '../utils/pathUtils';
+import { createFileTab } from '../utils/tabFactory';
 
 interface UseSearchNavigationProps {
   tabs: FileTab[];
@@ -36,18 +36,8 @@ export const useSearchNavigation = ({ tabs, setActiveTabId, addTab, editorAPI }:
         if (window.electronAPI) {
           const content = await window.electronAPI.readFile(filePath);
           if (content !== null) {
-            // パスからファイル名を抽出（Windows/Unixパス対応）
-            const fileName = filePath.replace(/\\/g, '/').split('/').pop() || 'Unknown';
-            const language = getLanguageFromFileName(fileName);
-
-            const newTab: FileTab = {
-              id: generateId(),
-              fileName: fileName,
-              filePath: filePath,
-              content: content,
-              language: language,
-              isModified: false
-            };
+            // ファクトリ関数でタブを作成
+            const newTab = createFileTab(filePath, content);
 
             addTab(newTab);
             setActiveTabId(newTab.id);

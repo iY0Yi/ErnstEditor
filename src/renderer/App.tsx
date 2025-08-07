@@ -95,6 +95,14 @@ const App: React.FC = () => {
     // console.log('💡 Use: window.testBlenderCommunication() in console to test');
   }, []);
 
+  // レンダラー準備完了を通知
+  React.useEffect(() => {
+    if (monaco && window.electronAPI?.notifyRendererReady) {
+      console.log('🎯 Renderer is ready, notifying main process...');
+      window.electronAPI.notifyRendererReady();
+    }
+  }, [monaco]);
+
   // テーマ管理フック
   const { theme, isLoading: themeLoading } = useTheme(monaco);
 

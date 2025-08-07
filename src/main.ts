@@ -4,7 +4,7 @@ import * as path from 'path';
 import { blenderService } from './services/blenderService';
 
 let mainWindow: BrowserWindow | null = null;
-let startupTimers: NodeJS.Timeout[] = []; // 起動時のタイマーを管理
+let pendingFileOpen: { filePath: string; trackPath: string | null } | null = null; // 起動時のファイル開く処理を保留
 
 // 親階層を辿って 'track' ディレクトリを検索
 function findTrackDirectory(startPath: string): string | null {
@@ -30,8 +30,26 @@ function getFilePathFromArgs(argv: string[]): { filePath: string; trackPath: str
 
   console.log('🔍 All command line arguments:', argv);
   console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
+  console.log('🔍 First argument (executable):', argv[0]);
 
-  const args = argv.slice(process.env.NODE_ENV === 'development' ? 2 : 1);
+  // デバッグ用：ログをファイルに出力
+  try {
+    const debugLog = `DEBUG CLI: ${new Date().toISOString()}
+Arguments: ${JSON.stringify(argv)}
+NODE_ENV: ${process.env.NODE_ENV}
+First arg: ${argv[0]}
+---
+`;
+    fs.appendFileSync('cli_debug.log', debugLog);
+  } catch (e) {
+    // ログ書き込みエラーは無視
+  }
+
+  // 開発環境かプロダクション環境かを判定
+  // electron で実行している場合は開発環境、ErnstEditor.exe の場合はプロダクション環境
+  const isDevelopment = argv[0].includes('electron') && !argv[0].includes('ErnstEditor.exe');
+  console.log('🔍 Is development environment:', isDevelopment);
+  const args = argv.slice(isDevelopment ? 2 : 1);
   console.log('🔍 Processed arguments:', args);
 
   for (let i = 0; i < args.length; i++) {
@@ -77,6 +95,13 @@ function openFileInRenderer(filePath: string, trackPath?: string | null) {
       const content = fs.readFileSync(filePath, 'utf-8');
       const fileName = path.basename(filePath);
 
+      console.log(`📂 Opening file from command line: ${filePath}`);
+      console.log(`📄 File name: ${fileName}`);
+      console.log(`📝 Content length: ${content.length}`);
+      if (trackPath) {
+        console.log(`🗂️ Setting project root to track directory: ${trackPath}`);
+      }
+
       mainWindow.webContents.send('file:open-from-cli', {
         filePath,
         content,
@@ -84,10 +109,7 @@ function openFileInRenderer(filePath: string, trackPath?: string | null) {
         trackPath: trackPath || null
       });
 
-      console.log(`Opening file from command line: ${filePath}`);
-      if (trackPath) {
-        console.log(`Setting project root to track directory: ${trackPath}`);
-      }
+      console.log('✅ CLI file open command sent to renderer');
     } catch (error) {
       console.error(`❌ Failed to open file from command line: ${error}`);
     }
@@ -409,6 +431,22 @@ ipcMain.handle('blender:get-connection-status', async (): Promise<{
   }
 });
 
+// レンダラー準備完了通知の処理
+ipcMain.handle('renderer:ready', async (): Promise<void> => {
+  console.log('🎯 Renderer is ready!');
+
+  // 保留中のファイル開く処理があれば実行
+  if (pendingFileOpen) {
+    console.log('📂 Opening pending file:', pendingFileOpen.filePath);
+    try {
+      openFileInRenderer(pendingFileOpen.filePath, pendingFileOpen.trackPath);
+      pendingFileOpen = null; // 処理完了後はクリア
+  } catch (error) {
+      console.error('❌ Error opening pending file:', error);
+    }
+  }
+});
+
 // Blender直接通信テスト用のIPC処理
 ipcMain.handle('blender:send-test-value', async (event: any, value: number): Promise<{
   success: boolean;
@@ -513,7 +551,7 @@ async function searchInFile(filePath: string, searchTerm: string, results: any[]
         searchIndex = matchIndex + 1;
       }
     });
-  } catch (error) {
+      } catch (error) {
     // バイナリファイルや読み取りエラーは無視
     console.warn('Cannot read file:', filePath, error);
   }
@@ -551,27 +589,9 @@ app.whenReady().then(async () => {
   console.log('🔍 Startup command line check');
   const result = getFilePathFromArgs(process.argv);
   if (result) {
-    console.log('✅ File found in startup arguments, setting timer');
-    try {
-      // ウィンドウが完全に読み込まれるまで少し待つ
-      const timerId = setTimeout(() => {
-        console.log('⏰ Timer executed, opening file');
-        try {
-          openFileInRenderer(result.filePath, result.trackPath);
-        } catch (error) {
-          console.error('❌ Error opening file in renderer:', error);
-        }
-        // タイマー配列から削除
-        const index = startupTimers.indexOf(timerId);
-        if (index > -1) {
-          startupTimers.splice(index, 1);
-        }
-      }, 1000);
-      startupTimers.push(timerId);
-      console.log('📝 Timer set successfully');
-      } catch (error) {
-      console.error('❌ Error setting timer:', error);
-    }
+    console.log('✅ File found in startup arguments, waiting for renderer ready');
+    // レンダラーが準備完了したらファイルを開く
+    pendingFileOpen = result;
   } else {
     console.log('⚠️ No file found in startup arguments');
   }
