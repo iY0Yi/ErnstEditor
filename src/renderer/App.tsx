@@ -147,6 +147,22 @@ const App: React.FC = () => {
     focusEditor: () => void;
   } | null>(null);
 
+  // setEditorAPIの実際の動作をデバッグ
+  const handleEditorReady = React.useCallback((api: {
+    getEditorValue: () => string;
+    navigateToPosition: (line: number, column: number) => void;
+    focusEditor: () => void;
+  }) => {
+    console.log('🔧 DEBUG: App.handleEditorReady called with API:', !!api);
+    setEditorAPI(api);
+    console.log('🔧 DEBUG: setEditorAPI called');
+  }, []);
+
+  // editorAPIの変化を監視
+  React.useEffect(() => {
+    console.log('🔍 DEBUG: editorAPI state changed:', !!editorAPI);
+  }, [editorAPI]);
+
     // trackディレクトリ設定のためのハンドラー
   const handleTrackDirectoryChange = React.useCallback((trackPath: string | null) => {
             // console.log('📁 App: Setting track directory path:', trackPath);
@@ -190,24 +206,38 @@ const App: React.FC = () => {
 
 
 
-  // EditorContainer統合後の保存機能
+  // シンプルな保存機能（Nudgeboxと同じ方式）
   const handleSaveFile = React.useCallback(async () => {
-    if (!editorAPI) {
-      // console.log('⚠️ handleSaveFile: EditorAPI not available, fallback to Save As');
-      handleSaveFileAs();
-      return;
-    }
-
+    console.log('🔍 DEBUG: handleSaveFile called (simple version)');
+    
     const currentTab = getActiveTab();
+    console.log('🔍 DEBUG: currentTab:', currentTab?.fileName, 'filePath:', currentTab?.filePath);
+    
     if (!currentTab || !currentTab.filePath) {
-      // console.log('⚠️ handleSaveFile: No active file, fallback to Save As');
+      console.log('⚠️ handleSaveFile: No active file, fallback to Save As');
       handleSaveFileAs();
       return;
     }
 
     try {
-      // エディタから現在の値を取得
-      const content = editorAPI.getEditorValue();
+      // Monaco Editorから直接内容を取得（Nudgeboxと同じ方式）
+      const monacoEditor = document.querySelector('.monaco-editor');
+      if (!monacoEditor) {
+        console.error('❌ Monaco Editor DOM not found');
+        handleSaveFileAs();
+        return;
+      }
+
+      // Monaco Editor インスタンスを取得
+      const editorInstance = (window as any).monaco?.editor?.getEditors?.()?.[0];
+      if (!editorInstance) {
+        console.error('❌ Monaco Editor instance not found');
+        handleSaveFileAs();
+        return;
+      }
+
+      const content = editorInstance.getValue();
+      console.log('🔍 DEBUG: content length:', content.length, 'content preview:', content.substring(0, 100));
 
       // ファイルに保存
       if (window.electronAPI) {
@@ -215,15 +245,16 @@ const App: React.FC = () => {
         if (result.success) {
           // タブの修正状態を更新
           updateTab(currentTab.id, { isModified: false, content });
-          // console.log('✅ File saved successfully:', currentTab.fileName);
+          console.log('✅ File saved successfully:', currentTab.fileName);
         } else {
           console.error('❌ Failed to save file:', result.error);
         }
       }
     } catch (error) {
       console.error('❌ Error saving file:', error);
+      handleSaveFileAs();
     }
-  }, [editorAPI, getActiveTab, handleSaveFileAs, updateTab]);
+  }, [getActiveTab, handleSaveFileAs, updateTab]);
 
   // テーマローディング中の表示（シンプルに背景色のみ）
   if (themeLoading) {
@@ -285,7 +316,7 @@ const App: React.FC = () => {
                 onOpenFile={handleOpenFile}
                 onSaveFile={handleSaveFile}
                 onNewFile={handleNewFile}
-                onEditorReady={setEditorAPI}
+                onEditorReady={handleEditorReady}
               />
             </>
           ) : (

@@ -51,7 +51,8 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     updateTab,
     onOpenFile,
     onSaveFile,
-    onNewFile
+    onNewFile,
+    onEditorReady
   });
 
   // アクティブタブ変更時にエディタを切り替え
@@ -66,16 +67,7 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     };
   }, [dispose]);
 
-  // エディタAPI を親コンポーネントに公開
-  useEffect(() => {
-    if (onEditorReady) {
-      onEditorReady({
-        getEditorValue,
-        navigateToPosition,
-        focusEditor
-      });
-    }
-  }, [onEditorReady, getEditorValue, navigateToPosition, focusEditor]);
+
 
   return (
     <div className="editor-container">

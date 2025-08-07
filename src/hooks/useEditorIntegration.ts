@@ -20,6 +20,11 @@ interface UseEditorIntegrationOptions {
   onOpenFile: () => void;
   onSaveFile: () => void;
   onNewFile: () => void;
+  onEditorReady?: (editorAPI: {
+    getEditorValue: () => string;
+    navigateToPosition: (line: number, column: number) => void;
+    focusEditor: () => void;
+  }) => void;
 }
 
 export const useEditorIntegration = (options: UseEditorIntegrationOptions) => {
@@ -28,12 +33,45 @@ export const useEditorIntegration = (options: UseEditorIntegrationOptions) => {
     updateTab,
     onOpenFile,
     onSaveFile,
-    onNewFile
+    onNewFile,
+    onEditorReady
   } = options;
 
   // エディタとマネージャーの参照
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const inlineNudgeboxManagerRef = useRef<InlineNudgeboxManager | null>(null);
+
+  // エディタの値を取得
+  const getEditorValue = useCallback(() => {
+    const editor = editorRef.current;
+    console.log('🔍 DEBUG: getEditorValue - editor exists:', !!editor);
+    if (editor) {
+      const value = editor.getValue();
+      console.log('🔍 DEBUG: getEditorValue - value length:', value.length, 'preview:', value.substring(0, 50));
+      return value;
+    }
+    console.log('🔍 DEBUG: getEditorValue - no editor, returning empty');
+    return '';
+  }, []);
+
+  // エディタにフォーカス
+  const focusEditor = useCallback(() => {
+    editorRef.current?.focus();
+  }, []);
+
+  // 指定した行・列に移動
+  const navigateToPosition = useCallback((line: number, column: number) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    // エディタの位置に移動
+    const position = { lineNumber: line, column: column };
+    editor.setPosition(position);
+    editor.revealLineInCenter(line);
+    editor.focus();
+
+    console.log(`📍 Navigated to line ${line}, column ${column}`);
+  }, []);
 
   // Monaco Editor beforeMount時の設定
   const handleBeforeMount = useCallback((monacoInstance: typeof monaco) => {
@@ -45,6 +83,7 @@ export const useEditorIntegration = (options: UseEditorIntegrationOptions) => {
     editor: monaco.editor.IStandaloneCodeEditor,
     monacoInstance: typeof monaco
   ) => {
+    console.log('🔧 DEBUG: handleEditorMount - setting editorRef');
     editorRef.current = editor;
 
     // キーボードショートカットを登録
@@ -85,7 +124,17 @@ export const useEditorIntegration = (options: UseEditorIntegrationOptions) => {
         editor.restoreViewState(activeTab.viewState);
       }
     }
-  }, [getActiveTab, updateTab, onOpenFile, onSaveFile, onNewFile]);
+
+    // エディタAPI を親コンポーネントに公開
+    if (onEditorReady) {
+      console.log('🔧 useEditorIntegration: Calling onEditorReady');
+      onEditorReady({
+        getEditorValue,
+        navigateToPosition,
+        focusEditor
+      });
+    }
+  }, [getActiveTab, updateTab, onOpenFile, onSaveFile, onNewFile, onEditorReady, getEditorValue, navigateToPosition, focusEditor]);
 
   // アクティブタブ変更時にモデルを切り替え
   const switchToTab = useCallback((tab: FileTab | null) => {
@@ -127,30 +176,6 @@ export const useEditorIntegration = (options: UseEditorIntegrationOptions) => {
       console.log('⚠️ Tab switch operation cancelled (normal behavior)');
     }
   }, [getActiveTab, updateTab]);
-
-  // エディタの値を取得
-  const getEditorValue = useCallback(() => {
-    return editorRef.current?.getValue() || '';
-  }, []);
-
-  // エディタにフォーカス
-  const focusEditor = useCallback(() => {
-    editorRef.current?.focus();
-  }, []);
-
-  // 指定した行・列に移動
-  const navigateToPosition = useCallback((line: number, column: number) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-
-    // エディタの位置に移動
-    const position = { lineNumber: line, column: column };
-    editor.setPosition(position);
-    editor.revealLineInCenter(line);
-    editor.focus();
-
-    console.log(`📍 Navigated to line ${line}, column ${column}`);
-  }, []);
 
   // クリーンアップ
   const dispose = useCallback(() => {

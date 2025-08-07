@@ -569,7 +569,7 @@ app.whenReady().then(async () => {
       }, 1000);
       startupTimers.push(timerId);
       console.log('📝 Timer set successfully');
-    } catch (error) {
+      } catch (error) {
       console.error('❌ Error setting timer:', error);
     }
   } else {
