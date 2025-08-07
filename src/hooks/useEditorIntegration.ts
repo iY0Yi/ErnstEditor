@@ -104,8 +104,7 @@ export const useEditorIntegration = (options: UseEditorIntegrationOptions) => {
     if (!inlineNudgeboxManagerRef.current) {
       console.log('🔧 Creating new InlineNudgeboxManager...');
       inlineNudgeboxManagerRef.current = new InlineNudgeboxManager(
-        getActiveTab,
-        updateTab
+        updateTab  // getActiveTabは削除、動的参照を使用
       );
       console.log('🔧 Integrating Nudgebox with Monaco Editor...');
       inlineNudgeboxManagerRef.current.integrate(editor);

@@ -127,6 +127,13 @@ const App: React.FC = () => {
   // エディタコンテナー用のコールバック関数
   const getActiveTab = React.useCallback(() => activeTab, [activeTab]);
 
+  // NudgeboxManagerが最新のアクティブタブにアクセスできるようにグローバル参照を設定
+  React.useEffect(() => {
+    (window as any).__ERNST_APP_INSTANCE__ = {
+      getActiveTab: () => activeTab
+    };
+  }, [activeTab]);
+
   // プロジェクト管理フック
   const {
     projectName,
@@ -209,10 +216,10 @@ const App: React.FC = () => {
   // シンプルな保存機能（Nudgeboxと同じ方式）
   const handleSaveFile = React.useCallback(async () => {
     console.log('🔍 DEBUG: handleSaveFile called (simple version)');
-    
+
     const currentTab = getActiveTab();
     console.log('🔍 DEBUG: currentTab:', currentTab?.fileName, 'filePath:', currentTab?.filePath);
-    
+
     if (!currentTab || !currentTab.filePath) {
       console.log('⚠️ handleSaveFile: No active file, fallback to Save As');
       handleSaveFileAs();
