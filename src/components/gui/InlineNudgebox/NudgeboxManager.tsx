@@ -38,13 +38,14 @@ export class InlineNudgeboxManager {
    * キーバインドをセットアップ
    */
   private setupKeyBindings(): void {
-    // Alt+X キーバインド
-    this.editor.addCommand(
-      monaco.KeyMod.Alt | monaco.KeyCode.KeyX,
-      () => {
+    // Alt+X: 起動 or キャンセル（トグル）
+    this.editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyX, () => {
+      if (this.widget) {
+        this.handleCancel();
+      } else {
         this.tryActivateNudgebox();
       }
-    );
+    });
   }
 
   /**

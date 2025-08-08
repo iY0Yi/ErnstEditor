@@ -22,12 +22,12 @@ Note: The old InlineFloat implementation is deprecated. Use InlineNudgebox.
 
 ### Nudgebox controls
 - Confirm: `Enter`
-- Cancel: `Esc`
+- Cancel: `Alt+X`
 - Step sizes with Arrow Up/Down
   - No modifier: 0.1
-  - `Ctrl` + Arrow: 0.01
-  - `Shift` + Arrow: 0.001
-  - `Alt` + Arrow: 0.0001
+  - `Alt` + Arrow: 0.01
+  - `Ctrl` + Arrow: 0.001
+  - `Shift` + Arrow: 0.0001
 
 The sidebar width can be adjusted by dragging its boundary. The width is saved and restored via the session.
 

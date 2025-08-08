@@ -6,7 +6,6 @@ import * as monaco from 'monaco-editor';
 import { NudgeboxOptions } from './types';
 import {
   calculateTextWidth,
-  calculateArrowKeyStep,
   calculatePositionAdjustment,
   calculateZoomAdjustedSizes,
   getDecimalPlaces,
@@ -68,13 +67,13 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
    * イベントリスナーをセットアップ
    */
   private setupEventListeners(): void {
-    // Enter: 確定、ESC: キャンセル、矢印キー: 精度制御
+    // Enter: 確定、Alt+X: キャンセル、矢印キー: 精度制御
     this.numberInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
         this.confirm();
-      } else if (e.key === 'Escape') {
+      } else if ((e as KeyboardEvent).altKey && (e.key === 'x' || e.key === 'X')) {
         e.preventDefault();
         e.stopPropagation();
         this.cancel();
@@ -118,23 +117,23 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
 
   /**
    * 矢印キーによる精度制御ステップ処理
-   * スライダーと同じ仕様:
-   * - 修飾キーなし: 第1小数点 (0.1)
-   * - Ctrl+矢印: 1/100精度 (0.01)
-   * - Shift+矢印: 1/1000精度 (0.001)
-   * - Alt+矢印: 1/10000精度 (0.0001)
+   * 指定仕様:
+   * - 修飾なし: 0.1
+   * - Alt+矢印: 0.01
+   * - Ctrl+矢印: 0.001
+   * - Shift+矢印: 0.0001
    */
   private handleArrowKeyStep(e: KeyboardEvent): void {
     const currentValue = parseFloat(this.numberInput.value) || 0;
-    let stepSize = 0.1; // デフォルトステップサイズ（第1小数点）
+    let stepSize = 0.1; // デフォルト
 
-    // 修飾キーによる精度制御
-    if (e.ctrlKey) {
-      stepSize = 0.01; // Ctrl+矢印: 1/100精度
+    // 修飾キーによる精度（Alt > Ctrl > Shift の優先順）
+    if (e.altKey) {
+      stepSize = 0.01;
+    } else if (e.ctrlKey) {
+      stepSize = 0.001;
     } else if (e.shiftKey) {
-      stepSize = 0.001; // Shift+矢印: 1/1000精度
-    } else if (e.altKey) {
-      stepSize = 0.0001; // Alt+矢印: 1/10000精度
+      stepSize = 0.0001;
     }
 
     // 上下キーによる増減
