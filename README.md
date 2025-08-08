@@ -1,8 +1,12 @@
-# Ernst Editor
+<p align="center">
+  <img src="assets/images/screenshot0.jpg" alt="Ernst Editor - Welcome" width="960" />
+</p>
 
 <p align="center">
-  <img src="assets/images/kv_logo.jpg" alt="Ernst Editor" width="960" />
+  <img src="assets/images/screenshot1.jpg" alt="Ernst Editor - Editing" width="960" />
 </p>
+
+# Ernst Editor
 
 A minimal GLSL editor tailored for [ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer). Adjust numeric constants inline and see immediate results—no recompilation required, even with heavy shaders.
 
