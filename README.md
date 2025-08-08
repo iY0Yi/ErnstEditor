@@ -1,8 +1,10 @@
 # Ernst Editor
 
-A lightweight GLSL editor that integrates with Blender and lets you adjust numeric values inline.
+<p align="center">
+  <img src="assets/images/kv_logo.jpg" alt="Ernst Editor" width="960" />
+</p>
 
-Note: This editor does not integrate with vanilla Blender alone. It requires the custom renderer addon “ErnstRenderer”. See: [ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer)
+A lightweight GLSL editor that integrates with “[ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer)” and lets you adjust numeric values inline.
 
 ## Overview
 - Built on Monaco Editor
