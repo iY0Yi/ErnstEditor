@@ -60,13 +60,25 @@ export function createSessionFromTabs(
     if (typeof w === 'number') sidebarWidth = w;
   } catch {}
 
+  // ウィンドウ位置とサイズ
+  let windowBounds: any = undefined;
+  try {
+    const currentWindow = (window as any).require?.('electron')?.remote?.getCurrentWindow?.();
+    // remote は無効なので、メインプロセスからの保存に依存する。renderer 側では直近値を UI_STATE に保持しておく
+    const s = (window as any).__ERNST_UI_STATE__?.windowBounds;
+    if (s && typeof s.width === 'number' && typeof s.height === 'number') {
+      windowBounds = s;
+    }
+  } catch {}
+
   return {
     projectPath,
     projectName,
     lastModified: Date.now(),
     openTabs,
     editorFontSize,
-    sidebarWidth
+    sidebarWidth,
+    windowBounds
   };
 }
 

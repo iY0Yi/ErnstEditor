@@ -60,7 +60,7 @@ ErnstEditor.exe "path/to/shader.glsl"
 ```
 
 ## Session persistence
-- Includes: open tabs, active tab, editor font size, sidebar width
+- Includes: open tabs, active tab, editor font size, sidebar width, window position/size
 - Mechanism: persisted via `SESSION_SAVE` / `SESSION_LOAD` IPC and a session file
 
 ## Key components

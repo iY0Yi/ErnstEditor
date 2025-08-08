@@ -241,11 +241,29 @@ export function useBufferManager({
     if (_pendingActivationTabId) {
       const targetTab = _tabs.find(tab => tab.id === _pendingActivationTabId);
       if (targetTab) {
-        setActiveBuffer(_pendingActivationTabId);
-        _setPendingActivationTabId(null);
+        (async () => {
+          const ok = await setActiveBuffer(_pendingActivationTabId);
+          if (ok) {
+            _setPendingActivationTabId(null);
+          }
+        })();
       }
     }
   }, [_tabs, _pendingActivationTabId, setActiveBuffer, _activeTabId]);
+
+  // Monaco エディタが準備できていなかった場合のリトライ
+  React.useEffect(() => {
+    const editorReady = !!(window as any).monacoEditorInstance || !!(window as any).monaco?.editor?.getEditors?.()?.[0];
+    if (editorReady && !_activeTabId && _tabs.length > 0) {
+      const targetId = _pendingActivationTabId || _tabs[0].id;
+      (async () => {
+        const ok = await setActiveBuffer(targetId);
+        if (ok && _pendingActivationTabId === targetId) {
+          _setPendingActivationTabId(null);
+        }
+      })();
+    }
+  }, [_activeTabId, _pendingActivationTabId, _tabs, setActiveBuffer]);
 
   /**
    * タブ追加 + アクティブ化
@@ -310,11 +328,7 @@ export function useBufferManager({
   const saveActiveTab = React.useCallback(async (): Promise<boolean> => {
     console.log('📚BufferManager: Saving active tab');
 
-    const activeTab = getActiveTab();
-    if (!activeTab || !activeTab.filePath) {
-      console.log('📚BufferManager: No active file to save');
-      return false;
-    }
+    let activeTab = getActiveTab();
 
     try {
       // Monaco Editorから直接内容を取得（フォールバック付き）
@@ -330,6 +344,27 @@ export function useBufferManager({
 
       if (!editorInstance) {
         console.error('📚BufferManager: Monaco Editor instance not found');
+        return false;
+      }
+
+      // 追加フォールバック: 現在のエディタモデルからタブを逆引き
+      if (!activeTab || !activeTab.filePath) {
+        try {
+          const currentModel = editorInstance.getModel?.();
+          if (currentModel) {
+            const found = _tabsRef.current.find(t => t.model === currentModel);
+            if (found) {
+              activeTab = found;
+              if (_activeTabId !== found.id) {
+                _setActiveTabId(found.id);
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (!activeTab || !activeTab.filePath) {
+        console.log('📚BufferManager: No active file to save');
         return false;
       }
 

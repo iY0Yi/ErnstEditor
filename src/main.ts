@@ -667,7 +667,22 @@ import { saveSession, loadSession, sessionExists } from './services/sessionServi
 
 ipcMain.handle(IPC.SESSION_SAVE, async (event: any, sessionData: any, trackPath: string) => {
   try {
-    return await saveSession(sessionData, trackPath);
+    // 現在のウィンドウ位置/サイズを付与して保存
+    const bounds = mainWindow?.getBounds();
+    const withBounds = {
+      ...sessionData,
+      windowBounds: bounds
+        ? {
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+            isMaximized: mainWindow?.isMaximized?.() ?? false,
+            isFullScreen: mainWindow?.isFullScreen?.() ?? false
+          }
+        : sessionData?.windowBounds
+    };
+    return await saveSession(withBounds, trackPath);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { success: false, error: errorMessage };
@@ -676,7 +691,39 @@ ipcMain.handle(IPC.SESSION_SAVE, async (event: any, sessionData: any, trackPath:
 
 ipcMain.handle(IPC.SESSION_LOAD, async (event: any, trackPath: string) => {
   try {
-    return await loadSession(trackPath);
+    const result = await loadSession(trackPath);
+    try {
+      // セッションにウィンドウ位置/サイズがあれば適用
+      const data: any = (result as any)?.data;
+      if (data && data.windowBounds && mainWindow && !mainWindow.isDestroyed()) {
+        const b = data.windowBounds as { x?: number; y?: number; width: number; height: number; isMaximized?: boolean; isFullScreen?: boolean };
+        // まずフルスクリーン/最大化状態を適用
+        if (b.isFullScreen) {
+          mainWindow.setFullScreen(true);
+          return result;
+        } else {
+          mainWindow.setFullScreen(false);
+        }
+
+        if (b.isMaximized) {
+          mainWindow.maximize();
+          return result;
+        } else if (mainWindow.isMaximized()) {
+          mainWindow.unmaximize();
+        }
+
+        // 位置とサイズを安全に適用（未定義は現在値を使用）
+        const current = mainWindow.getBounds();
+        const newBounds = {
+          x: Number.isFinite(b.x as number) ? (b.x as number) : current.x,
+          y: Number.isFinite(b.y as number) ? (b.y as number) : current.y,
+          width: Number.isFinite(b.width) ? b.width : current.width,
+          height: Number.isFinite(b.height) ? b.height : current.height
+        };
+        mainWindow.setBounds(newBounds);
+      }
+    } catch {}
+    return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { success: false, error: errorMessage };

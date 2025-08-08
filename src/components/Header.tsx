@@ -1,5 +1,6 @@
 import React from 'react';
 import { FileTab } from '../types';
+import MaterialIcon from './icons/MaterialIcons';
 
 interface HeaderProps {
   activeTab: FileTab;
@@ -42,15 +43,15 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  // 接続ステータスのテキストとアイコン
+  // 接続ステータスのテキストとアイコン（Material Icons）
   const getConnectionInfo = () => {
     switch (connectionStatus) {
       case 'connected':
-        return { text: 'Connected', icon: '●' };
+        return { text: 'Connected', icon: 'link' as const };
       case 'error':
-        return { text: 'Connection Error', icon: '●' };
+        return { text: 'Connection Error', icon: 'link_off' as const };
       default:
-        return { text: 'Disconnected', icon: '●' };
+        return { text: 'Disconnected', icon: 'link_off' as const };
     }
   };
 
@@ -72,12 +73,9 @@ const Header: React.FC<HeaderProps> = ({
       {/* Right Section: Connection Status + Window Controls */}
       <div className="header-right">
         {/* Connection Status */}
-        <div className={`connection-status ${connectionStatus}`}>
+        <div className={`connection-status ${connectionStatus}`} title={connectionInfo.text}>
           <div className="connection-indicator-icon">
-            {connectionInfo.icon}
-          </div>
-          <div className="connection-text">
-            {connectionInfo.text}
+            <MaterialIcon name={connectionInfo.icon} size={21} />
           </div>
         </div>
 

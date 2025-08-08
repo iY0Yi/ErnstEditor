@@ -122,7 +122,10 @@ const MATERIAL_ICONS = {
     <>
       <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.49 8.49l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.49-8.49l2.83-2.83"/>
     </>
-  )
+  ),
+  // placeholders for link/link_off (rendered specially in component)
+  link: (<g />),
+  link_off: (<g />)
 };
 
 export const MaterialIcon: React.FC<MaterialIconProps> = ({
@@ -130,14 +133,33 @@ export const MaterialIcon: React.FC<MaterialIconProps> = ({
   size = 16,
   className = ''
 }) => {
-  const iconPath = MATERIAL_ICONS[name as keyof typeof MATERIAL_ICONS];
+  const iconKey = name as keyof typeof MATERIAL_ICONS;
+  const iconPath = MATERIAL_ICONS[iconKey];
+
+  // Special-case filled Google Material icons that use a different viewBox
+  if (iconKey === 'link' || iconKey === 'link_off') {
+    const d = iconKey === 'link'
+      ? 'M420-310H286q-70.55 0-120.27-49.82Q116-409.64 116-480.32t49.73-120.18Q215.45-650 286-650h134v46H286q-51 0-87.5 36.5T162-480q0 51 36.5 87.5T286-356h134v46Zm-76-148v-46h272v46H344Zm196 148v-46h134q51 0 87.5-36.5T798-480q0-51-36.5-87.5T674-604H540v-46h134q70.55 0 120.28 49.82Q844-550.36 844-479.68T794.28-359.5Q744.55-310 674-310H540Z'
+      : 'm737-325-38-33q42.78-12.3 69.89-46.65Q796-439 796-480q0-51-36-87.5T674-604H536v-46h138q69.47 0 118.73 49.83Q842-550.34 842-479.78q0 50.37-29.5 90.57Q783-349 737-325ZM600-458l-46-46h58v46h-12ZM791-99 99-793l34-32 692 692-34 34ZM422-310H288q-70.47 0-120.23-49.77Q118-409.53 118-480q0-58.93 37.5-102.97Q193-627 260-648h24l41 44h-36q-52 0-88.5 36.5T164-480q0 51 36.5 87.5T288-356h134v46Zm-74-148v-46h71l45 46H348Z';
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 -960 960 960"
+        fill="currentColor"
+        className={`material-icon ${className}`}
+      >
+        <path d={d} />
+      </svg>
+    );
+  }
 
   if (!iconPath) {
     console.warn(`Material Icon "${name}" not found`);
     return null;
   }
 
-    return (
+  return (
     <svg
       width={size}
       height={size}

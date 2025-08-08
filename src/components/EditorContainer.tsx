@@ -84,7 +84,19 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
       run: () => {
         try {
           const ctx = (editor as any)._appContext as React.ContextType<typeof AppContext> | null;
-          ctx?.saveActiveTab?.();
+          if (ctx?.saveActiveTab) {
+            ctx.saveActiveTab();
+            return;
+          }
+          // フォールバック: BufferManager を直接呼ぶ
+          const setActive = (window as any)?.__ERNST_SET_ACTIVE_BUFFER__;
+          const tabs = (window as any)?.__ERNST_BUFFER_TABS__;
+          const activeId = (window as any)?.__ERNST_BUFFER_ACTIVE_ID__;
+          if (!activeId && Array.isArray(tabs) && tabs[0]?.id && setActive) {
+            setActive(tabs[0].id);
+          }
+          const bmSave = (window as any)?.__ERNST_APP_CONTEXT__?.saveActiveTab;
+          bmSave?.();
         } catch {}
       }
     });
@@ -105,6 +117,19 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
         focusEditor: () => editor.focus()
       });
     }
+
+    // 初回マウント時、アクティブタブが未設定なら最前タブをフォーカス
+    try {
+      const bmActive = (window as any)?.__ERNST_BUFFER_ACTIVE_ID__;
+      if (!bmActive) {
+        const tabs = (window as any)?.__ERNST_BUFFER_TABS__;
+        const firstId = Array.isArray(tabs) && tabs[0]?.id;
+        if (firstId) {
+          const setActive = (window as any)?.__ERNST_SET_ACTIVE_BUFFER__;
+          setActive?.(firstId);
+        }
+      }
+    } catch {}
 
   }, [onEditorReady, updateTab]);
 

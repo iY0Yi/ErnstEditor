@@ -23,6 +23,17 @@
   overflow: hidden;
 }
 
+/* 初回起動時の全面クリック用オーバーレイ（ヘッダーを除外） */
+.app-open-overlay {
+  position: absolute;
+  top: 32px; /* header height */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  cursor: pointer;
+  z-index: 900; /* header(1000)の下、コンテンツの上 */
+}
+
 /* サイドバーエリア */
 .app-sidebar {
   width: 250px;

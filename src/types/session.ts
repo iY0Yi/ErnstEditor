@@ -31,6 +31,16 @@ export interface SessionData {
 
   // レイアウト: サイドバーの現在幅（px）
   sidebarWidth?: number;
+
+  // ウィンドウの位置とサイズ
+  windowBounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    isMaximized?: boolean;
+    isFullScreen?: boolean;
+  };
 }
 
 /**

@@ -188,6 +188,13 @@ const App: React.FC = () => {
 
   const activeTab = getActiveTab();
 
+  // デバッグ/外部操作用に一部関数を公開
+  React.useEffect(() => {
+    (window as any).__ERNST_SET_ACTIVE_BUFFER__ = setActiveBuffer;
+    (window as any).__ERNST_BUFFER_TABS__ = tabs;
+    (window as any).__ERNST_BUFFER_ACTIVE_ID__ = activeTabId;
+  }, [setActiveBuffer, tabs, activeTabId]);
+
   // デバッグログ削減: activeTabのログは停止
 
 
@@ -359,6 +366,19 @@ const App: React.FC = () => {
     console.log('✅ File opened from FileExplorer:', fileName);
   }, [addTabAndActivate]);
 
+  // ヘッダー下の全域クリックでフォルダを開く（初回起動時）
+  const handleOpenFolderOverlayClick = React.useCallback(async () => {
+    try {
+      const { electronClient } = require('../services/electronClient');
+      const result = await electronClient.openFolder();
+      if (result && result.rootPath) {
+        handleTrackDirectoryChange(result.rootPath);
+      }
+    } catch (e) {
+      console.error('Open folder overlay error:', e);
+    }
+  }, [handleTrackDirectoryChange]);
+
 
 
   // 保存機能（BufferManager内蔵を使用）
@@ -395,21 +415,25 @@ const App: React.FC = () => {
 
       {/* メインコンテンツ（サイドバー + エディタ） */}
       <div className="app-main-content">
-        {/* サイドバー（ファイルエクスプローラー + 検索パネル） */}
-        <div className="app-sidebar" style={{ width: `${sidebarWidth}px` }}>
-        <SidebarPanel
-            onFileSelect={handleFileSelect}
-            activeFilePath={activeTab?.filePath || null}
-            onSearchResult={handleSearchResult}
-            onProjectRootChange={handleTrackDirectoryChange}
-            onRefreshFileTreeCallback={setRefreshFileTreeCallback}
-            onFileRenamed={(oldPath: string, newPath: string) => updateTabPath(oldPath, newPath)}
-            onFileDeleted={(filePath: string) => closeTabByPath(filePath)}
-            externalProjectRoot={trackDirectoryPath}
-          />
-        </div>
+        {/* サイドバー（初回は非表示） */}
+        {trackDirectoryPath ? (
+          <div className="app-sidebar" style={{ width: `${sidebarWidth}px` }}>
+            <SidebarPanel
+              onFileSelect={handleFileSelect}
+              activeFilePath={activeTab?.filePath || null}
+              onSearchResult={handleSearchResult}
+              onProjectRootChange={handleTrackDirectoryChange}
+              onRefreshFileTreeCallback={setRefreshFileTreeCallback}
+              onFileRenamed={(oldPath: string, newPath: string) => updateTabPath(oldPath, newPath)}
+              onFileDeleted={(filePath: string) => closeTabByPath(filePath)}
+              externalProjectRoot={trackDirectoryPath}
+            />
+          </div>
+        ) : null}
         {/* 垂直リサイザ */}
-        <div className="app-resizer" onMouseDown={handleResizerMouseDown} title="Drag to resize sidebar" />
+        {trackDirectoryPath ? (
+          <div className="app-resizer" onMouseDown={handleResizerMouseDown} title="Drag to resize sidebar" />
+        ) : null}
 
         {/* エディタエリア または ウェルカムスクリーン */}
         <div className="app-editor-area">
@@ -446,6 +470,11 @@ const App: React.FC = () => {
             <WelcomeScreen />
           )}
         </div>
+
+        {/* 初回起動: ヘッダー以外の全面クリックでフォルダ選択 */}
+        {!trackDirectoryPath ? (
+          <div className="app-open-overlay" onClick={handleOpenFolderOverlayClick} title="Open Folder" />
+        ) : null}
       </div>
     </div>
     </AppContext.Provider>

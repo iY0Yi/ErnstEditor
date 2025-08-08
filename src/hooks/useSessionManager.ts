@@ -124,6 +124,17 @@ export function useSessionManager({
           }
         } catch {}
 
+        // ウィンドウ位置/サイズはメイン側で適用済み。renderer 側にもキャッシュ
+        try {
+          const wb = (sessionData as any).windowBounds;
+          if (wb) {
+            (window as any).__ERNST_UI_STATE__ = {
+              ...(window as any).__ERNST_UI_STATE__,
+              windowBounds: wb
+            };
+          }
+        } catch {}
+
         // エディタのフォントサイズ（ズーム相当）を遅延適用（EditorContainer側で受け取って適用）
         if (typeof (sessionData as any).editorFontSize === 'number') {
           const targetFontSize = (sessionData as any).editorFontSize as number;
