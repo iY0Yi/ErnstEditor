@@ -1,74 +1,90 @@
 # Ernst Editor
 
-GLSL 向けの軽量エディタ。Blender と連携し、コード内の数値をインラインで調整できる。
+A lightweight GLSL editor that integrates with Blender and lets you adjust numeric values inline.
 
-## 概要
-- Monaco Editor ベース
-- Blender 連携（WebSocket サーバが自動起動、ポート 8765）
-- インライン数値編集（Inline Nudgebox）
-- プロジェクトツリー、タブ、セッション保存（開いているファイル・エディタ状態・サイドバー幅）
+Note: This editor does not integrate with vanilla Blender alone. It requires the custom renderer addon “ErnstRenderer”. See: [ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer)
 
-注: 旧実装の InlineFloat は deprecated。現行は InlineNudgebox を使用。
+## Overview
+- Built on Monaco Editor
+- Blender integration (WebSocket server auto-starts on port 8765)
+- Inline numeric editing (Inline Nudgebox)
+- Project tree, tabs, session persistence (open files, editor state, sidebar width)
 
-## 使い方
-1. Ernst Editor を起動
-2. 左サイドバーでフォルダを開く、またはファイルを開く
-3. GLSL コード内の数値をダブルクリックするとインラインの数値エディタが表示される
-4. 値を調整すると即時に Blender へ送信される
+Note: The old InlineFloat implementation is deprecated. Use InlineNudgebox.
 
-サイドバーは境界をドラッグして幅を変更できる。幅はセッションに保存・復元される。
+## Usage
+1. Launch Ernst Editor
+2. Open a folder from the left sidebar, or open a file
+3. Place the caret on a numeric literal in GLSL and press `Alt+X` to launch the Nudgebox
+4. Adjust with Arrow Up/Down (changes are sent to Blender in real time)
 
-## 開発
-### セットアップ
+### Nudgebox controls
+- Confirm: `Enter`
+- Cancel: `Esc`
+- Step sizes with Arrow Up/Down
+  - No modifier: 0.1
+  - `Ctrl` + Arrow: 0.01
+  - `Shift` + Arrow: 0.001
+  - `Alt` + Arrow: 0.0001
+
+The sidebar width can be adjusted by dragging its boundary. The width is saved and restored via the session.
+
+## Development
+### Setup
 ```bash
 git clone https://github.com/yourusername/ErnstEditor.git
 cd ErnstEditor
 npm install
 ```
 
-### スクリプト
-- `npm run dev-electron` 開発実行（ホットリロード）
-- `npm run build` バンドルのみ
-- `npm run build-exe` Windows 向け実行ファイルを生成
+### Scripts
+- `npm run dev-electron` Start development with hot reload
+- `npm run build` Bundle only
+- `npm run build-exe` Build a Windows executable
 
-出力: `build/ErnstEditor-win32-x64/ErnstEditor.exe`
+Output: `build/ErnstEditor-win32-x64/ErnstEditor.exe`
 
-## Blender 連携
-- WebSocket サーバはアプリ起動時に自動開始（ポート 8765）
-- 値更新はリアルタイムに送信される
+## Blender integration
+- Target: Requires the custom renderer addon “ErnstRenderer”
+  - Repository: [ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer)
+  - It will not connect on vanilla Blender without the addon
+- The WebSocket server auto-starts on port 8765
+- Value updates are sent in real time
+- Follow the addon’s README for installation and usage (install, enable in Blender, edit GLSL in the `track` folder for hot reload)
 
-## CLI から開く
+## Command line
 ```bash
 ErnstEditor.exe "path/to/shader.glsl"
 ```
 
-## セッション保存
-- 対象: 開いているタブ、アクティブタブ、エディタのフォントサイズ、サイドバー幅
-- 仕組み: `SESSION_SAVE`/`SESSION_LOAD` IPC とファイルによる永続化
+## Session persistence
+- Includes: open tabs, active tab, editor font size, sidebar width
+- Mechanism: persisted via `SESSION_SAVE` / `SESSION_LOAD` IPC and a session file
 
-## 主要構成
-- `src/renderer/App.tsx`: アプリのルート。サイドバー/タブ/エディタのオーケストレーション。
-- `src/components/EditorContainer.tsx`: Monaco 初期化と統合。自動レイアウト、ミニマップ設定、リサイズ時の `editor.layout()`。
-- `src/components/SidebarPanel.tsx`: ファイルツリー/検索パネル。
-- `src/components/TabManager.tsx`: タブ UI。
-- `src/components/gui/InlineNudgebox/*`: インライン数値編集の実装。
-- `src/hooks/useBufferManager.ts`: タブ/保存/パス更新などの中心ロジック。
-- `src/hooks/useSessionManager.ts`: セッション保存/復元（`editorFontSize`/`sidebarWidth` を含む）。
-- `src/services/electronClient.ts`: `window.electronAPI` の型付きラッパー。
-- `src/constants/ipc.ts`: IPC チャネル定義。
+## Key components
+- `src/renderer/App.tsx`: App root; orchestrates sidebar/tabs/editor
+- `src/components/EditorContainer.tsx`: Monaco initialization and integration; automatic layout, minimap config, `editor.layout()` on resize
+- `src/components/SidebarPanel.tsx`: File tree / search panel
+- `src/components/TabManager.tsx`: Tab UI
+- `src/components/gui/InlineNudgebox/*`: Inline numeric editing implementation
+- `src/hooks/useBufferManager.ts`: Central tab/save/path update logic
+- `src/hooks/useSessionManager.ts`: Session save/restore (includes `editorFontSize` / `sidebarWidth`)
+- `src/services/electronClient.ts`: Typed wrapper around `window.electronAPI`
+- `src/constants/ipc.ts`: IPC channel definitions
 
-## 設定（Monaco 抜粋）
+## Monaco settings (excerpt)
 - `automaticLayout: true`
-- ミニマップ有効、右表示、`showSlider: 'always'`
+- Minimap enabled, right side, `showSlider: 'always'`
 - `wordWrap: 'on'`
 
-## トラブルシューティング
-- Blender に反映されない: Blender を再起動して接続を確認
-- 8765 が使用中: ポートの競合を解消
+## Troubleshooting
+- Values not reflected in Blender: restart Blender and check the connection
+- Port 8765 is in use: resolve the conflict or free the port
 
-## 要件
-- Windows 10 以降 (x64)
-- Node.js 18+ / npm（開発時）
+## Requirements
+- Windows 10+ (x64)
+- Node.js 18+ / npm (for development)
+- Blender + ErnstRenderer addon ([ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer))
 
-## ライセンス
+## License
 MIT
