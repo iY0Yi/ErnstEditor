@@ -4,7 +4,7 @@
   <img src="assets/images/kv_logo.jpg" alt="Ernst Editor" width="960" />
 </p>
 
-A lightweight GLSL editor that integrates with “[ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer)” and lets you adjust numeric values inline.
+A minimal GLSL editor tailored for [ErnstRenderer](https://github.com/iY0Yi/ErnstRenderer). Adjust numeric constants inline and see immediate results—no recompilation required, even with heavy shaders.
 
 ## Overview
 - Built on Monaco Editor
