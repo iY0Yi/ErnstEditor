@@ -1,8 +1,5 @@
 <p align="center">
   <img src="assets/images/screenshot0.jpg" alt="Ernst Editor - Welcome" width="960" />
-</p>
-
-<p align="center">
   <img src="assets/images/screenshot1.jpg" alt="Ernst Editor - Editing" width="960" />
 </p>
 
@@ -24,16 +21,24 @@ Note: The old InlineFloat implementation is deprecated. Use InlineNudgebox.
 3. Place the caret on a numeric literal in GLSL and press `Alt+X` to launch the Nudgebox
 4. Adjust with Arrow Up/Down (changes are sent to Blender in real time)
 
-### Nudgebox controls
-- Confirm: `Enter`
-- Cancel: `Alt+X`
-- Step sizes with Arrow Up/Down
-  - No modifier: 0.1
-  - `Alt` + Arrow: 0.01
-  - `Ctrl` + Arrow: 0.001
-  - `Shift` + Arrow: 0.0001
+## Nudgebox controls
 
-The sidebar width can be adjusted by dragging its boundary. The width is saved and restored via the session.
+<img src="assets/images/screenshot2.jpg" alt="Nudgebox controls" width="960" />
+
+An inline numeric editor that opens at the caret on numeric literals. Press Alt+X to toggle, use Arrow Up/Down to nudge the value. Changes are sent to ErnstRenderer in real time.
+
+| Action   | Shortcut              |
+|----------|-----------------------|
+| Launch   | Alt+X                 |
+| Confirm  | Alt+X                 |
+
+| Modifier | Step (Arrow Up/Down) |
+|----------|-----------------------|
+| None     | 0.1                   |
+| Alt      | 0.01                  |
+| Ctrl     | 0.001                 |
+| Shift    | 0.0001                |
+
 
 ## Development
 ### Setup
