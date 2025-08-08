@@ -36,12 +36,9 @@ export class ErnstWebSocketServer {
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        console.log(`🔧 Creating WebSocket Server on localhost:${this.port}...`);
-        console.log(`🔍 Current isRunning state: ${this.isRunning}`);
 
         // 既に起動している場合はスキップ
         if (this.wss && this.isRunning) {
-          console.log('⚠️ WebSocket Server already running');
           resolve();
           return;
         }
@@ -52,15 +49,11 @@ export class ErnstWebSocketServer {
         });
 
         this.wss.on('listening', () => {
-          console.log(`🚀 Ernst WebSocket Server started on port ${this.port}`);
           this.isRunning = true;
-          console.log('✅ isRunning flag set to true');
-          console.log(`📊 Server status check: isRunning=${this.isRunning}, port=${this.port}`);
           resolve();
         });
 
         this.wss.on('connection', (ws: WebSocket, request) => {
-          console.log('🔌 Blender client connected');
           this.clients.add(ws);
 
           // 接続状態変更を通知
@@ -80,7 +73,6 @@ export class ErnstWebSocketServer {
           });
 
           ws.on('close', () => {
-            console.log('🔌 Blender client disconnected');
             this.clients.delete(ws);
 
             // 接続状態変更を通知（クライアントがいなくなった場合のみ）
@@ -140,20 +132,18 @@ export class ErnstWebSocketServer {
           if (error) {
             console.error('❌ Error closing WebSocket server:', error);
           } else {
-            console.log('🛑 Ernst WebSocket Server stopped');
           }
           this.isRunning = false;
           this.wss = null;
           resolve();
         });
 
-        // タイムアウト設定（5秒で強制終了）
+        // タイムアウト設定（1秒で強制終了）
         setTimeout(() => {
-          console.log('⚠️ WebSocket server stop timeout, forcing shutdown');
           this.isRunning = false;
           this.wss = null;
           resolve();
-        }, 5000);
+        }, 1000);
       } else {
         this.isRunning = false;
         resolve();
@@ -167,7 +157,6 @@ export class ErnstWebSocketServer {
   private handleMessage(ws: WebSocket, message: string): void {
     try {
       const data: BlenderMessage = JSON.parse(message);
-      console.log(`📨 Received from Blender: ${data.type}`, data.data);
 
       switch (data.type) {
         case 'ping':
@@ -177,7 +166,6 @@ export class ErnstWebSocketServer {
 
         case 'pong':
           // pong受信（ヘルスチェック成功）
-          console.log('💓 Pong received from Blender');
           break;
 
         case 'error':
@@ -206,7 +194,6 @@ export class ErnstWebSocketServer {
     };
 
     this.broadcastMessage(message);
-    console.log(`🎛️ Sending uniform to Blender: u_inline1f = ${value}`);
   }
 
   /**
@@ -319,7 +306,6 @@ export class ErnstWebSocketServer {
    * 接続状態変更を通知（内部使用）
    */
   private notifyConnectionChange(connected: boolean): void {
-    console.log('📡 Notifying connection change:', connected);
     this.connectionCallbacks.forEach(callback => {
       try {
         callback(connected);

@@ -84,8 +84,9 @@ export function applyThemeToDOM(theme: Theme): void {
 export async function loadTheme(themeName: string = 'ernst-dark'): Promise<Theme> {
   try {
     // ElectronのIPCを使用してテーマを読み込む
-    if (window.electronAPI) {
-      const themeData = await window.electronAPI.loadTheme(themeName);
+    const { electronClient } = require('../services/electronClient');
+    if (electronClient) {
+      const themeData = await electronClient.loadTheme(themeName);
       if (themeData) {
         return themeData;
       }

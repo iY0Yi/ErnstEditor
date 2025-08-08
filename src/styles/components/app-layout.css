@@ -3,7 +3,7 @@
 /* アプリのベースコンテナ */
 .app-container {
   height: 100vh;
-  width: 100vw;
+  width: 100%;
   display: flex;
   flex-direction: column;
   background-color: #101010; /* 初期背景色を統一 */
@@ -12,7 +12,7 @@
 /* テーマローディング画面 */
 .app-loading {
   height: 100vh;
-  width: 100vw;
+  width: 100%;
   background-color: #101010;
 }
 
@@ -26,10 +26,19 @@
 /* サイドバーエリア */
 .app-sidebar {
   width: 250px;
-  min-width: 200px;
+  min-width: 180px;
+  max-width: 70vw;
   height: 100%;
   overflow: hidden;
 }
+
+/* サイドバー用リサイザ */
+.app-resizer {
+  width: 1px;
+  cursor: col-resize;
+  background: var(--theme-ui-background-dark, #000000);
+}
+/* hover 時も視覚変化なし（カーソルのみ変化） */
 
 /* エディタエリア */
 .app-editor-area {
@@ -37,9 +46,11 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0; /* 子要素のオーバーフローによるはみ出し防止（Monacoミニマップ対策） */
 }
 
 /* エディタコンテナ */
 .editor-container {
   flex: 1;
+  min-width: 0; /* Monacoの内部レイアウトが親幅に追従するように */
 }

@@ -38,13 +38,25 @@ export interface ElectronAPI {
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<SearchResult[]>;
 
   // コマンドライン引数からのファイル開き用API
-  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string; trackPath?: string | null }) => void) => void;
+  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string; trackPath?: string | null; projectName?: string | null }) => void) => void;
   removeFileOpenFromCLIListener: () => void;
 
   // Blender接続状態API
   getBlenderConnectionStatus: () => Promise<{ isServerRunning: boolean; isBlenderConnected: boolean; clientCount: number }>;
   onBlenderConnectionChange: (callback: (connected: boolean) => void) => void;
   removeBlenderConnectionListener: () => void;
+
+  // Blenderサーバー制御用API
+  forceStartBlenderServer: () => Promise<{ success: boolean; error?: string }>;
+  sendTestValueToBlender: (value: number) => Promise<{ success: boolean; error?: string }>;
+
+  // レンダラー準備完了通知API
+  notifyRendererReady: () => Promise<void>;
+
+  // セッション保存・読み込み用API
+  saveSession: (sessionData: any, trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
+  loadSession: (trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
+  sessionExists: (trackPath: string) => Promise<boolean>;
 }
 
 // グローバル型定義

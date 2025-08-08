@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+import { IPC } from './constants/ipc';
 
 interface ElectronAPI {
   // 既存のファイル操作API
@@ -40,54 +41,64 @@ interface ElectronAPI {
 
   // レンダラー準備完了通知API
   notifyRendererReady: () => Promise<void>;
+
+  // セッション保存・読み込み用API
+  saveSession: (sessionData: any, trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
+  loadSession: (trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
+  sessionExists: (trackPath: string) => Promise<boolean>;
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // 既存のファイル操作API
-  openFile: () => ipcRenderer.invoke('file:open'),
-  saveFile: (filePath: string, content: string) => ipcRenderer.invoke('file:save', filePath, content),
-  saveFileAs: (content: string) => ipcRenderer.invoke('file:saveAs', content),
+  openFile: () => ipcRenderer.invoke(IPC.FILE_OPEN),
+  saveFile: (filePath: string, content: string) => ipcRenderer.invoke(IPC.FILE_SAVE, filePath, content),
+  saveFileAs: (content: string) => ipcRenderer.invoke(IPC.FILE_SAVE_AS, content),
 
   // ファイルエクスプローラー用API
-  openFolder: () => ipcRenderer.invoke('folder:open'),
-  refreshFolder: (folderPath: string) => ipcRenderer.invoke('folder:refresh', folderPath),
-  readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath),
-  renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('file:rename', oldPath, newPath),
-  deleteFile: (filePath: string) => ipcRenderer.invoke('file:delete', filePath),
-  moveFile: (sourcePath: string, targetDir: string) => ipcRenderer.invoke('file:move', sourcePath, targetDir),
+  openFolder: () => ipcRenderer.invoke(IPC.FOLDER_OPEN),
+  refreshFolder: (folderPath: string) => ipcRenderer.invoke(IPC.FOLDER_REFRESH, folderPath),
+  readFile: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ, filePath),
+  renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke(IPC.FILE_RENAME, oldPath, newPath),
+  deleteFile: (filePath: string) => ipcRenderer.invoke(IPC.FILE_DELETE, filePath),
+  moveFile: (sourcePath: string, targetDir: string) => ipcRenderer.invoke(IPC.FILE_MOVE, sourcePath, targetDir),
 
   // ウィンドウコントロール用API
-  minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
-  maximizeWindow: () => ipcRenderer.invoke('window:maximize'),
-  closeWindow: () => ipcRenderer.invoke('window:close'),
+  minimizeWindow: () => ipcRenderer.invoke(IPC.WINDOW_MINIMIZE),
+  maximizeWindow: () => ipcRenderer.invoke(IPC.WINDOW_MAXIMIZE),
+  closeWindow: () => ipcRenderer.invoke(IPC.WINDOW_CLOSE),
 
   // テーマ読み込み用API
-  loadTheme: (themeName?: string) => ipcRenderer.invoke('theme:load', themeName),
+  loadTheme: (themeName?: string) => ipcRenderer.invoke(IPC.THEME_LOAD, themeName),
 
   // 検索用API
-  searchInFiles: (searchTerm: string, projectRoot?: string) => ipcRenderer.invoke('search:files', searchTerm, projectRoot),
+  searchInFiles: (searchTerm: string, projectRoot?: string) => ipcRenderer.invoke(IPC.SEARCH_FILES, searchTerm, projectRoot),
 
   // コマンドライン引数からのファイル開き用API
   onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string }) => void) => {
-    ipcRenderer.on('file:open-from-cli', (event, data) => callback(data));
+    ipcRenderer.on(IPC.FILE_OPEN_FROM_CLI, (event, data) => callback(data));
   },
   removeFileOpenFromCLIListener: () => {
-    ipcRenderer.removeAllListeners('file:open-from-cli');
+    ipcRenderer.removeAllListeners(IPC.FILE_OPEN_FROM_CLI);
   },
 
   // Blenderサーバー制御用API
-  forceStartBlenderServer: () => ipcRenderer.invoke('blender:force-start-server'),
-  sendTestValueToBlender: (value: number) => ipcRenderer.invoke('blender:send-test-value', value),
+  forceStartBlenderServer: () => ipcRenderer.invoke(IPC.BLENDER_FORCE_START_SERVER),
+  sendTestValueToBlender: (value: number) => ipcRenderer.invoke(IPC.BLENDER_SEND_TEST_VALUE, value),
 
   // Blender接続状態API
-  getBlenderConnectionStatus: () => ipcRenderer.invoke('blender:get-connection-status'),
+  getBlenderConnectionStatus: () => ipcRenderer.invoke(IPC.BLENDER_GET_CONNECTION_STATUS),
   onBlenderConnectionChange: (callback: (connected: boolean) => void) => {
-    ipcRenderer.on('blender:connection-changed', (event, connected) => callback(connected));
+    ipcRenderer.on(IPC.BLENDER_CONNECTION_CHANGED, (event, connected) => callback(connected));
   },
   removeBlenderConnectionListener: () => {
-    ipcRenderer.removeAllListeners('blender:connection-changed');
+    ipcRenderer.removeAllListeners(IPC.BLENDER_CONNECTION_CHANGED);
   },
 
   // レンダラー準備完了通知API
-  notifyRendererReady: () => ipcRenderer.invoke('renderer:ready')
+  notifyRendererReady: () => ipcRenderer.invoke(IPC.RENDERER_READY),
+
+  // セッション保存・読み込み用API
+  saveSession: (sessionData: any, trackPath: string) => ipcRenderer.invoke(IPC.SESSION_SAVE, sessionData, trackPath),
+  loadSession: (trackPath: string) => ipcRenderer.invoke(IPC.SESSION_LOAD, trackPath),
+  sessionExists: (trackPath: string) => ipcRenderer.invoke(IPC.SESSION_EXISTS, trackPath)
 } as ElectronAPI);

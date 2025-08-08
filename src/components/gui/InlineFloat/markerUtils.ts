@@ -5,8 +5,6 @@ import { FloatMarker, FloatMatch } from './types';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const tokenizer = require('glsl-tokenizer/string');
 
-console.log('🔧 FloatDetector using glsl-tokenizer for accurate GLSL parsing');
-
 /**
  * GLSLコード内の浮動小数点数を検出
  */
@@ -21,15 +19,12 @@ export class FloatDetector {
     model: monaco.editor.ITextModel,
     position: monaco.IPosition
   ): FloatMatch | null {
-    console.log('🔍 DetectFloatAtPosition called with glsl-tokenizer:', { position });
 
     const line = model.getLineContent(position.lineNumber);
-    console.log('📄 Line content:', line);
 
         try {
       // GLSLコードをトークン化
       const tokens = tokenizer(line);
-      console.log('🎯 Tokens found:', tokens.length);
 
             // 各トークンをチェック
       for (let i = 0; i < tokens.length; i++) {
@@ -41,14 +36,6 @@ export class FloatDetector {
         // token.positionを使って正確な位置を計算
         const startColumn = token.position + 1; // Monaco は 1-indexed, glsl-tokenizer.position は 0-indexed
         const endColumn = startColumn + token.data.length;
-
-        console.log('🎯 Checking float token:', {
-          data: token.data,
-          startColumn,
-          endColumn,
-          clickColumn: position.column,
-          inRange: position.column >= startColumn && position.column <= endColumn
-        });
 
         // クリック位置がトークン範囲内にあるかチェック
         if (position.column >= startColumn && position.column <= endColumn) {
@@ -80,10 +67,8 @@ export class FloatDetector {
         }
       }
 
-      console.log('❌ No float found at click position');
       return null;
     } catch (error) {
-      console.error('❌ Error parsing GLSL with tokenizer:', error);
       return null;
     }
   }
@@ -124,8 +109,6 @@ export class FloatDetector {
     const results: FloatMatch[] = [];
     const lineCount = model.getLineCount();
 
-    console.log('🔍 Detecting all floats using glsl-tokenizer...');
-
     for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
       const line = model.getLineContent(lineNumber);
 
@@ -161,12 +144,9 @@ export class FloatDetector {
           } as FloatMatch);
         }
       } catch (error) {
-        console.error(`❌ Error parsing line ${lineNumber} with tokenizer:`, error);
         continue;
       }
     }
-
-    console.log('✅ Found', results.length, 'float tokens using glsl-tokenizer');
     return results;
   }
 }

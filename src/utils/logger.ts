@@ -73,8 +73,20 @@ class Logger {
 }
 
 // デフォルトロガー
+// 既定はINFO。詳細は環境変数 ERNST_LOG_LEVEL で上書き可能（ERROR|WARN|INFO|DEBUG|TRACE）
+function parseLevel(input?: string): LogLevel {
+  switch ((input || '').toUpperCase()) {
+    case 'ERROR': return LogLevel.ERROR;
+    case 'WARN': return LogLevel.WARN;
+    case 'INFO': return LogLevel.INFO;
+    case 'DEBUG': return LogLevel.DEBUG;
+    case 'TRACE': return LogLevel.TRACE;
+    default: return LogLevel.INFO;
+  }
+}
+
 export const logger = new Logger({
-  level: process.env.NODE_ENV === 'development' ? LogLevel.DEBUG : LogLevel.INFO,
+  level: parseLevel((window as any)?.process?.env?.ERNST_LOG_LEVEL) || LogLevel.INFO,
   prefix: 'Ernst'
 });
 

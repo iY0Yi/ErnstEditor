@@ -6,7 +6,7 @@
   flex-direction: column;
   height: 100%;
   background: var(--theme-sidebar-background, #1e1e1e);
-  border-right: 1px solid var(--theme-ui-background-dark, #000000);
+  border-right: 0px solid var(--theme-ui-background-dark, #000000);
 }
 
 /* タブヘッダー（アイコン表示） */

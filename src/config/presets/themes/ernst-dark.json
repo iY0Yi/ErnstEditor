@@ -60,7 +60,7 @@
     "sidebar": {
       "background": "#181818",
       "foreground": "#BBBBBB",
-      "border": "#555555",
+      "border": "#202020",
       "hover": "#202020",
       "activeBackground": "#262626",
       "activeForeground": "#EEEEEE"

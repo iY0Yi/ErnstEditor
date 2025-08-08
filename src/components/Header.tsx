@@ -22,20 +22,23 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   // ウィンドウコントロール関数
   const handleMinimize = () => {
-    if (window.electronAPI) {
-      window.electronAPI.minimizeWindow();
+    const { electronClient } = require('../services/electronClient');
+    if (electronClient) {
+      electronClient.minimizeWindow();
     }
   };
 
   const handleMaximize = () => {
-    if (window.electronAPI) {
-      window.electronAPI.maximizeWindow();
+    const { electronClient } = require('../services/electronClient');
+    if (electronClient) {
+      electronClient.maximizeWindow();
     }
   };
 
   const handleClose = () => {
-    if (window.electronAPI) {
-      window.electronAPI.closeWindow();
+    const { electronClient } = require('../services/electronClient');
+    if (electronClient) {
+      electronClient.closeWindow();
     }
   };
 

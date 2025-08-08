@@ -40,6 +40,23 @@
   color: var(--theme-tabs-active-foreground, #cccccc);
 }
 
+/* 未保存タブ（VS Code風） - 優先度強化 */
+.tab-bar .tab-item.modified {
+  color: var(--theme-tabs-modified-foreground, #ffffff) !important;
+  font-style: italic !important;
+}
+
+.tab-bar .tab-item.modified .tab-filename {
+  color: inherit !important;
+  font-style: italic !important;
+}
+
+/* アクティブかつ未保存のタブ - 優先度強化 */
+.tab-bar .tab-item.active.modified {
+  color: var(--theme-tabs-active-modified-foreground, #ffffff) !important;
+  font-style: italic !important;
+}
+
 /* ドラッグ中のタブ */
 .tab-item.dragging {
   cursor: grabbing;
@@ -52,6 +69,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+
+/* 未保存ドット（VS Code風） - 優先度強化 */
+.tab-bar .tab-item .tab-modified-dot {
+  display: inline-block !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background-color: var(--theme-tabs-modified-dot, #ffffff) !important;
+  margin-left: 6px !important;
+  margin-right: 2px !important;
+  flex-shrink: 0 !important;
 }
 
 /* タブ閉じるボタン */
@@ -69,6 +98,11 @@
   align-items: center;
   justify-content: center;
   transition: color 0.2s ease;
+}
+
+/* 未保存タブでは閉じるボタンを隠してドットを表示 - 優先度強化 */
+.tab-bar .tab-item.modified .tab-close-button {
+  display: none !important;
 }
 
 .tab-close-button:hover {

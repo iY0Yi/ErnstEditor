@@ -1,24 +1,38 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { logger } from '../utils/logger';
 import { PathUtils } from '../utils/pathUtils';
 
 export const useProjectManager = () => {
+  // 表示用の最終的なプロジェクト名
   const [projectName, setProjectName] = useState<string>('');
+  // 直接指定されたプロジェクト名（CLI など）を保持
+  const directNameRef = useRef<string>('');
   const [refreshFileTreeCallback, setRefreshFileTreeCallback] = useState<(() => void) | null>(null);
 
   // プロジェクトルート変更ハンドラー
   const handleProjectRootChange = useCallback((root: string | null) => {
-    console.log('📁 ProjectManager: handleProjectRootChange called with:', root);
+    logger.debug('ProjectManager: handleProjectRootChange', { root });
 
     if (root) {
-      // ルートフォルダ名を抽出してプロジェクト名として設定
+      // ルートフォルダ名（例: track）
       const folderName = PathUtils.getDirectoryName(root);
-      console.log('📁 ProjectManager: Setting project name to:', folderName);
-      setProjectName(folderName);
-      console.log('✅ ProjectManager: Project name set successfully');
+      logger.debug('ProjectManager: derived folder name', { folderName });
+      // すでに direct 名が指定されている場合は上書きしない
+      if (!directNameRef.current) {
+        setProjectName(folderName);
+      }
     } else {
-      console.log('📁 ProjectManager: Clearing project name');
+      // ルートが外れたら direct もクリア
+      directNameRef.current = '';
       setProjectName('');
     }
+  }, []);
+
+  // プロジェクト名を直接設定（CLI起動時用）
+  const setProjectNameDirect = useCallback((name: string) => {
+    logger.info('ProjectManager: set direct project name', { name });
+    directNameRef.current = name || '';
+    setProjectName(directNameRef.current);
   }, []);
 
   // ファイル操作とタブ同期のコールバック
@@ -35,6 +49,7 @@ export const useProjectManager = () => {
     refreshFileTreeCallback,
     setRefreshFileTreeCallback,
     handleProjectRootChange,
+    setProjectNameDirect,
     handleFileRenamed,
     handleFileDeleted
   };

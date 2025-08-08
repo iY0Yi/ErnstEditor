@@ -39,8 +39,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
 
   // プロジェクトルートを開く
   const openProjectFolder = async () => {
-    if (window.electronAPI && 'openFolder' in window.electronAPI) {
-      const result = await (window.electronAPI as any).openFolder();
+    const { electronClient } = require('../services/electronClient');
+    if (electronClient && electronClient.openFolder) {
+      const result = await electronClient.openFolder();
       if (result) {
         setFiles(result.files);
         setProjectRoot(result.rootPath);
@@ -51,12 +52,13 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
 
   // 指定されたディレクトリを読み込む
   const loadProjectDirectory = async (directoryPath: string) => {
-    console.log('FileExplorer: Loading project directory:', directoryPath);
-    if (window.electronAPI && 'refreshFolder' in window.electronAPI) {
+    console.log('📂FileExplorer: Loading project directory:', directoryPath);
+    const { electronClient } = require('../services/electronClient');
+    if (electronClient && electronClient.refreshFolder) {
       try {
-        const result = await (window.electronAPI as any).refreshFolder(directoryPath);
+        const result = await electronClient.refreshFolder(directoryPath);
         if (result) {
-          console.log('FileExplorer: Directory loaded successfully');
+          console.log('📂FileExplorer: Directory loaded successfully');
           setFiles(result.files);
           setProjectRoot(directoryPath);
           onProjectRootChange?.(directoryPath);
@@ -72,7 +74,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
   // 外部からのプロジェクトルート設定を処理
   React.useEffect(() => {
     if (externalProjectRoot && externalProjectRoot !== projectRoot) {
-      console.log('FileExplorer: External project root changed:', externalProjectRoot);
+      console.log('📂FileExplorer: External project root changed:', externalProjectRoot);
       loadProjectDirectory(externalProjectRoot);
     }
   }, [externalProjectRoot, projectRoot]);
@@ -82,8 +84,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
     const handleItemClick = async () => {
       if (item.type === 'file') {
         // ファイルの内容を読み込んでタブで開く
-        if (window.electronAPI && 'readFile' in window.electronAPI) {
-          const content = await (window.electronAPI as any).readFile(item.path);
+        const { electronClient } = require('../services/electronClient');
+        if (electronClient && electronClient.readFile) {
+          const content = await electronClient.readFile(item.path);
           if (content !== null) {
             onFileSelect(item.path, item.name, content);
           }
@@ -141,8 +144,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
         }
 
         // ファイル/ディレクトリを目標ディレクトリに移動
-        if (window.electronAPI && 'moveFile' in window.electronAPI) {
-          const result = await (window.electronAPI as any).moveFile(draggedItem.path, targetDirectoryPath);
+        const { electronClient } = require('../services/electronClient');
+        if (electronClient && electronClient.moveFile) {
+          const result = await electronClient.moveFile(draggedItem.path, targetDirectoryPath);
           if (result.success) {
             // ファイルツリーを更新
             await refreshFileTree();
@@ -157,17 +161,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
   return (
       <div key={item.id}>
         <div
-          className={`file-tree-item ${item.type === 'file' && item.path === activeFilePath ? 'selected' : ''}`}
+          className={`file-tree-item file-item ${item.type === 'file' && item.path === activeFilePath ? 'selected' : ''}`}
           onClick={handleItemClick}
           onContextMenu={handleContextMenu}
           draggable
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
           style={{
             paddingLeft: `${depth * 16 + 8}px`,
           }}
-          className="file-item"
         >
                     {item.type === 'directory' && (
             <FileTypeIcon
@@ -252,7 +255,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
     }
 
     const targetItem = findItemById(files, renamingItem);
-    if (!targetItem || !window.electronAPI) {
+    const { electronClient } = require('../services/electronClient');
+    if (!targetItem || !electronClient) {
       handleRenameCancel();
       return;
     }
@@ -269,7 +273,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
       pathParts[pathParts.length - 1] = renameValue.trim(); // 最後の部分（ファイル名）を置き換え
       const newPath = pathParts.join(pathSeparator);
 
-      const result = await window.electronAPI.renameFile(targetItem.path, newPath);
+      const result = await electronClient.renameFile(targetItem.path, newPath);
       if (result.success) {
         // タブ同期コールバックを呼び出し
         onFileRenamed?.(targetItem.path, newPath);
@@ -300,10 +304,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
   };
 
   const handleDelete = async () => {
-    if (contextMenu?.targetItem && window.electronAPI) {
+    const { electronClient } = require('../services/electronClient');
+    if (contextMenu?.targetItem && electronClient) {
       const confirmed = confirm(`Delete "${contextMenu.targetItem.name}"?`);
       if (confirmed) {
-        const result = await window.electronAPI.deleteFile(contextMenu.targetItem.path);
+        const result = await electronClient.deleteFile(contextMenu.targetItem.path);
         if (result.success) {
           // タブ同期コールバックを呼び出し
           onFileDeleted?.(contextMenu.targetItem.path);
@@ -353,11 +358,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
 
   // ファイルツリーを再読み込み（展開状態を保持）
   const refreshFileTree = async () => {
-    if (projectRoot && window.electronAPI) {
+    const { electronClient } = require('../services/electronClient');
+    if (projectRoot && electronClient) {
       // 現在の展開状態を保存
       const expandedPaths = collectExpandedPaths(files);
 
-      const result = await window.electronAPI.refreshFolder(projectRoot);
+      const result = await electronClient.refreshFolder(projectRoot);
       if (result) {
         // 新しいファイルツリーに展開状態を適用
         const filesWithExpandedState = applyExpandedState(result.files, expandedPaths);

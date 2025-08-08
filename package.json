@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "webpack --config webpack.config.js && webpack --config webpack.main.config.js && webpack --config webpack.preload.config.js",
-    "build-exe": "npm run build && electron-packager . ErnstEditor --platform=win32 --arch=x64 --out=build --overwrite",
+    "build-exe": "npm run build && electron-packager . ErnstEditor --platform=win32 --arch=x64 --out=build --overwrite --icon=assets/icons/icons/icons/win/icon.ico",
     "dev": "npm run build && electron .",
     "webpack:watch": "concurrently \"webpack --config webpack.config.js --watch\" \"webpack --config webpack.main.config.js --watch\" \"webpack --config webpack.preload.config.js --watch\"",
     "electron:dev": "wait-on dist/main.js dist/preload.js dist/renderer.js && nodemon --watch dist --delay 500ms --exec \"electron .\"",

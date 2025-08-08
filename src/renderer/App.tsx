@@ -5,13 +5,18 @@ import Header from '../components/Header';
 import TabManager from '../components/TabManager';
 import EditorContainer from '../components/EditorContainer';
 import WelcomeScreen from '../components/WelcomeScreen';
-import { useTabManager } from '../hooks/useTabManager';
-import { useFileOperations } from '../hooks/useFileOperations';
+
+
 import { useTheme } from '../hooks/useTheme';
+import { getLanguageFromFileName } from '../components/language';
 import { useBlenderConnection } from '../hooks/useBlenderConnection';
 import { useCLIFileHandler } from '../hooks/useCLIFileHandler';
 import { useSearchNavigation } from '../hooks/useSearchNavigation';
 import { useProjectManager } from '../hooks/useProjectManager';
+import { useSessionManager } from '../hooks/useSessionManager';
+import { useBufferManager } from '../hooks';
+import { AppContext } from '../context/AppContext';
+import { FileTab } from '../types';
 
 // CSSをWebpack経由でインポート（ホットリロード対応）
 import '../styles/base/fonts.css';
@@ -27,6 +32,65 @@ import '../styles/components/file-explorer.css';
 
 const App: React.FC = () => {
   const monaco = useMonaco();
+  // サイドバー幅（ドラッグで可変）
+  const [sidebarWidth, setSidebarWidth] = React.useState<number>(() => {
+    const restored = (window as any).__ERNST_UI_STATE__?.sidebarWidth;
+    if (typeof restored === 'number' && Number.isFinite(restored)) {
+      return Math.min(Math.max(restored, 180), 600);
+    }
+    return 250;
+  });
+  const resizingRef = React.useRef<boolean>(false);
+  const startXRef = React.useRef<number>(0);
+  const startWidthRef = React.useRef<number>(sidebarWidth);
+
+  const handleResizerMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const delta = ev.clientX - startXRef.current;
+      const next = Math.min(Math.max(startWidthRef.current + delta, 180), Math.floor(window.innerWidth * 0.7));
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      if (!resizingRef.current) return;
+      resizingRef.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      // ドラッグ終了後にエディタを確実にレイアウト
+      try {
+        (window as any).monacoEditorInstance?.layout?.();
+      } catch {}
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [sidebarWidth]);
+
+  // 幅の永続化（セッション情報へ反映）
+  React.useEffect(() => {
+    try {
+      (window as any).__ERNST_UI_STATE__ = {
+        ...(window as any).__ERNST_UI_STATE__,
+        sidebarWidth
+      };
+    } catch {}
+  }, [sidebarWidth]);
+
+  // セッション復元時のサイドバー幅適用
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      const width = e?.detail;
+      if (typeof width === 'number' && Number.isFinite(width)) {
+        setSidebarWidth(Math.min(Math.max(width, 180), Math.floor(window.innerWidth * 0.7)));
+        try { (window as any).monacoEditorInstance?.layout?.(); } catch {}
+      }
+    };
+    window.addEventListener('ERNST_APPLY_SIDEBAR_WIDTH', handler as EventListener);
+    return () => window.removeEventListener('ERNST_APPLY_SIDEBAR_WIDTH', handler as EventListener);
+  }, []);
 
   // Monaco Editor関連のPromise例外を処理
   React.useEffect(() => {
@@ -52,24 +116,7 @@ const App: React.FC = () => {
 
     // レンダラープロセスからBlenderサーバー起動状況を確認&強制起動
   React.useEffect(() => {
-    // console.log('🔍 Renderer: Checking Blender server status...');
-
-    // メインプロセスのサーバー起動を確実にするため、少し遅延させて強制実行
-    setTimeout(async () => {
-            try {
-        // サーバー状態を確認（デバッグ時のみ）
-        if (window.electronAPI && window.electronAPI.getBlenderConnectionStatus) {
-          const status = await window.electronAPI.getBlenderConnectionStatus();
-          // console.log('📊 Renderer: Current server status:', status);
-
-          if (!status.isServerRunning) {
-            // console.log('⚠️ Renderer: Server not running, forcing startup...');
-          }
-        }
-      } catch (error) {
-        console.error('❌ Renderer: Error checking server status:', error);
-      }
-    }, 3000);
+    // 必要時のみ手動で呼ぶ（タイマーは使わない）
   }, []);
 
     // 直接通信テスト用の関数（デバッグ用）
@@ -78,14 +125,7 @@ const App: React.FC = () => {
 
     // 複数の値を連続送信してテスト
     const testValues = [0.1, 0.5, 1.0, 2.0, 0.0];
-    testValues.forEach((value, index) => {
-      setTimeout(() => {
-        // console.log(`📤 Test ${index + 1}: Sending value ${value} to Blender`);
-        if (window.electronAPI && (window.electronAPI as any).sendTestValueToBlender) {
-          (window.electronAPI as any).sendTestValueToBlender(value);
-        }
-      }, index * 1000);
-    });
+    // デバッグ時のみ呼び出して使う
   };
 
   // デバッグ用: ウィンドウオブジェクトに関数を追加
@@ -97,9 +137,9 @@ const App: React.FC = () => {
 
   // レンダラー準備完了を通知
   React.useEffect(() => {
-    if (monaco && window.electronAPI?.notifyRendererReady) {
-      console.log('🎯 Renderer is ready, notifying main process...');
-      window.electronAPI.notifyRendererReady();
+    if (monaco) {
+      const { electronClient } = require('../services/electronClient');
+      electronClient.notifyRendererReady?.();
     }
   }, [monaco]);
 
@@ -110,50 +150,97 @@ const App: React.FC = () => {
   const { connectionStatus } = useBlenderConnection();
 
   // タブ管理フック（Monaco インスタンスを渡す）
+  // 中央集中型バッファマネージャ（saveSessionは後で設定）
+  const bufferManager = useBufferManager({
+    initialTabs: [],
+    onTabsChange: (tabs: FileTab[]) => {
+      // タブ変更時の処理（必要に応じて）
+    },
+    monaco: monaco // Monaco インスタンスを直接渡す
+    // saveSessionは useSessionManager 後に設定
+  });
+
+  // レガシー互換性のための分解
   const {
     tabs,
-    activeTab,
     activeTabId,
-    draggedTabId,
-    setActiveTabId,
-    updateTab,
+    getActiveTab,
+    setActiveBuffer,
     addTab,
+    addTabAndActivate,
     closeTab,
+    updateTab,
+    saveActiveTab,
+    handleEditorChange,
+    // 統合された機能
+    draggedTabId,
     createNewFile,
-    saveViewState,
-    createModel,
-    disposeModel,
     handleDragStart,
     handleDragOver,
     handleDrop,
     handleDragEnd,
-    handleEditorChange,
+    // ファイル操作
+    saveActiveTabAs,
+    // パス管理統合機能
     updateTabPath,
     closeTabByPath
-  } = useTabManager(monaco);
+  } = bufferManager;
 
-  // エディタコンテナー用のコールバック関数
-  const getActiveTab = React.useCallback(() => activeTab, [activeTab]);
+  const activeTab = getActiveTab();
+
+  // デバッグログ削減: activeTabのログは停止
+
+
+
+  // getActiveTabは bufferManager から取得済み
 
   // NudgeboxManagerが最新のアクティブタブにアクセスできるようにグローバル参照を設定
   React.useEffect(() => {
+    // Deprecated: __ERNST_APP_INSTANCE__ は互換のため一時残し
     (window as any).__ERNST_APP_INSTANCE__ = {
-      getActiveTab: () => activeTab
+      getActiveTab: () => activeTab,
+      saveActiveTab: saveActiveTab
     };
-  }, [activeTab]);
+    (window as any).__ERNST_APP_CONTEXT__ = {
+      getActiveTab,
+      saveActiveTab
+    };
+  }, [activeTab, saveActiveTab]);
 
-  // プロジェクト管理フック
+  // プロジェクト管理フック（パス管理機能はBufferManagerに統合済み）
   const {
     projectName,
     refreshFileTreeCallback,
     setRefreshFileTreeCallback,
     handleProjectRootChange,
-    handleFileRenamed,
-    handleFileDeleted
+    setProjectNameDirect
   } = useProjectManager();
 
   // trackディレクトリのパスを管理
   const [trackDirectoryPath, setTrackDirectoryPath] = React.useState<string | null>(null);
+
+  // 統一された起動処理の状態管理
+  const [sessionRestoreCompleted, setSessionRestoreCompleted] = React.useState(false);
+  const [pendingFileToOpen, setPendingFileToOpen] = React.useState<{filePath: string, content: string, fileName: string} | null>(null);
+
+  // セッション管理フック（統合BufferManager使用）
+  const { saveSession, loadSession, sessionExists, isLoading: sessionLoading, lastSaved } = useSessionManager({
+    tabs,
+    activeTabId,
+    trackPath: trackDirectoryPath,
+    projectName,
+    addTabAndActivate,
+    addTab,
+    hasPendingFile: !!pendingFileToOpen
+  });
+
+  // saveSession を BufferManager に設定
+  React.useEffect(() => {
+    if (saveSession) {
+      // BufferManagerの期待型は Promise<void> なのでラップ
+      bufferManager.setSaveSession(async () => { await saveSession(); });
+    }
+  }, [saveSession, bufferManager.setSaveSession]);
 
   // EditorContainer API の状態管理
   const [editorAPI, setEditorAPI] = React.useState<{
@@ -168,108 +255,124 @@ const App: React.FC = () => {
     navigateToPosition: (line: number, column: number) => void;
     focusEditor: () => void;
   }) => {
-    console.log('🔧 DEBUG: App.handleEditorReady called with API:', !!api);
     setEditorAPI(api);
-    console.log('🔧 DEBUG: setEditorAPI called');
   }, []);
 
   // editorAPIの変化を監視
-  React.useEffect(() => {
-    console.log('🔍 DEBUG: editorAPI state changed:', !!editorAPI);
-  }, [editorAPI]);
+  React.useEffect(() => {}, [editorAPI]);
 
-    // trackディレクトリ設定のためのハンドラー
+  // trackディレクトリ設定のハンドラー
   const handleTrackDirectoryChange = React.useCallback((trackPath: string | null) => {
-            // console.log('📁 App: Setting track directory path:', trackPath);
     setTrackDirectoryPath(trackPath);
     if (trackPath) {
       handleProjectRootChange(trackPath);
     }
   }, [handleProjectRootChange]);
 
-  // コマンドライン引数からのファイル開き処理フック（trackディレクトリ対応）
+  // CLIファイル処理（統一版）
   useCLIFileHandler({
-    addTab,
-    setActiveTabId,
-    onProjectRootChange: handleTrackDirectoryChange
+    onProjectRootChange: handleTrackDirectoryChange,
+    onProjectNameChange: setProjectNameDirect,
+    onPendingFile: setPendingFileToOpen
   });
 
-  // 検索ナビゲーション処理フック（EditorAPI を渡す）
+  // Step 5: セッション復元（trackディレクトリが設定された時）
+  React.useEffect(() => {
+    if (trackDirectoryPath && !sessionRestoreCompleted) {
+      (async () => {
+        try {
+          const exists = await sessionExists();
+          if (exists) {
+            const success = await loadSession();
+            // ログは簡素化
+          }
+        } catch (error) {
+          console.error('❌ Session restoration error:', error);
+        } finally {
+          setSessionRestoreCompleted(true);
+        }
+      })();
+    }
+  }, [trackDirectoryPath, sessionRestoreCompleted, sessionExists, loadSession]);
+
+  // CLIファイル処理（統合BufferManager使用）
+  const handleCLIFileActivation = React.useCallback(async (fileToOpen: {filePath: string, content: string, fileName: string}) => {
+    const newTab: FileTab = {
+      id: `cli-${Date.now()}-${Math.random()}`,
+      fileName: fileToOpen.fileName,
+      filePath: fileToOpen.filePath,
+      content: fileToOpen.content,
+      language: getLanguageFromFileName(fileToOpen.fileName),
+      isModified: false
+    };
+
+    await addTabAndActivate(newTab);
+  }, [addTabAndActivate]);
+
+    // Step 6: ファイルパスがある場合の追加ファイル開き
+  React.useEffect(() => {
+    if (sessionRestoreCompleted && pendingFileToOpen && monaco) {
+      (async () => {
+        await handleCLIFileActivation(pendingFileToOpen);
+        setPendingFileToOpen(null);
+      })();
+    }
+  }, [sessionRestoreCompleted, pendingFileToOpen, handleCLIFileActivation, monaco]);
+
+  // 検索ナビゲーション処理フック（統合されたBufferManager使用）
   const { handleSearchResult } = useSearchNavigation({
     tabs,
-    setActiveTabId,
-    addTab,
+    setActiveBuffer,
+    addTabAndActivate,
     editorAPI
   });
 
-  // ファイル操作フック（一時的に簡略化、後でEditorContainerとの連携を追加）
-  const {
-    handleOpenFile,
-    handleSaveFile: originalHandleSaveFile,
-    handleSaveFileAs,
-    handleNewFile,
-    handleFileSelect
-  } = useFileOperations(
-    activeTab,
-    null, // editorRefを一時的にnullに
-    addTab,
-    updateTab,
-    setActiveTabId,
-    createNewFile,
-    refreshFileTreeCallback || undefined
-  );
+  // ファイル操作（統合されたBufferManager使用）
+  const handleOpenFile = React.useCallback(async (): Promise<void> => {
+    const { electronClient } = require('../services/electronClient');
+    const result = await electronClient.openFile();
+    if (!result) return;
+
+    const newTab: FileTab = {
+      id: `dialog-${Date.now()}-${Math.random()}`,
+      fileName: result.fileName,
+      filePath: result.filePath,
+      content: result.content,
+      language: getLanguageFromFileName(result.fileName),
+      isModified: false
+    };
+
+    await addTabAndActivate(newTab);
+  }, [addTabAndActivate]);
+
+  const handleFileSelect = React.useCallback(async (filePath: string, fileName: string, content: string) => {
+    const newTab: FileTab = {
+      id: `fileexplorer-${Date.now()}-${Math.random()}`,
+      fileName,
+      filePath,
+      content,
+      language: getLanguageFromFileName(fileName),
+      isModified: false
+    };
+
+    await addTabAndActivate(newTab);
+    console.log('✅ File opened from FileExplorer:', fileName);
+  }, [addTabAndActivate]);
 
 
 
-  // シンプルな保存機能（Nudgeboxと同じ方式）
+  // 保存機能（BufferManager内蔵を使用）
   const handleSaveFile = React.useCallback(async () => {
-    console.log('🔍 DEBUG: handleSaveFile called (simple version)');
-
-    const currentTab = getActiveTab();
-    console.log('🔍 DEBUG: currentTab:', currentTab?.fileName, 'filePath:', currentTab?.filePath);
-
-    if (!currentTab || !currentTab.filePath) {
-      console.log('⚠️ handleSaveFile: No active file, fallback to Save As');
-      handleSaveFileAs();
-      return;
+    const success = await saveActiveTab();
+    if (!success) {
+      console.log('⚠️ Save failed, fallback to Save As');
+      await saveActiveTabAs();
     }
+  }, [saveActiveTab, saveActiveTabAs]);
 
-    try {
-      // Monaco Editorから直接内容を取得（Nudgeboxと同じ方式）
-      const monacoEditor = document.querySelector('.monaco-editor');
-      if (!monacoEditor) {
-        console.error('❌ Monaco Editor DOM not found');
-        handleSaveFileAs();
-        return;
-      }
-
-      // Monaco Editor インスタンスを取得
-      const editorInstance = (window as any).monaco?.editor?.getEditors?.()?.[0];
-      if (!editorInstance) {
-        console.error('❌ Monaco Editor instance not found');
-        handleSaveFileAs();
-        return;
-      }
-
-      const content = editorInstance.getValue();
-      console.log('🔍 DEBUG: content length:', content.length, 'content preview:', content.substring(0, 100));
-
-      // ファイルに保存
-      if (window.electronAPI) {
-        const result = await window.electronAPI.saveFile(currentTab.filePath, content);
-        if (result.success) {
-          // タブの修正状態を更新
-          updateTab(currentTab.id, { isModified: false, content });
-          console.log('✅ File saved successfully:', currentTab.fileName);
-        } else {
-          console.error('❌ Failed to save file:', result.error);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error saving file:', error);
-      handleSaveFileAs();
-    }
-  }, [getActiveTab, handleSaveFileAs, updateTab]);
+  const handleNewFile = React.useCallback(() => {
+    createNewFile();
+  }, [createNewFile]);
 
   // テーマローディング中の表示（シンプルに背景色のみ）
   if (themeLoading) {
@@ -277,6 +380,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <AppContext.Provider value={{ getActiveTab, saveActiveTab }}>
     <div className="app-container">
       {/* ヘッダー（メニューバー + プロジェクト情報 + 接続ステータス + ウィンドウコントロール） */}
       <Header
@@ -284,26 +388,28 @@ const App: React.FC = () => {
         onNewFile={handleNewFile}
         onOpenFile={handleOpenFile}
         onSaveFile={handleSaveFile}
-        onSaveFileAs={handleSaveFileAs}
+        onSaveFileAs={saveActiveTabAs}
         connectionStatus={connectionStatus}
         projectName={projectName}
       />
 
       {/* メインコンテンツ（サイドバー + エディタ） */}
       <div className="app-main-content">
-                {/* サイドバー（ファイルエクスプローラー + 検索パネル） */}
-        <div className="app-sidebar">
+        {/* サイドバー（ファイルエクスプローラー + 検索パネル） */}
+        <div className="app-sidebar" style={{ width: `${sidebarWidth}px` }}>
         <SidebarPanel
             onFileSelect={handleFileSelect}
             activeFilePath={activeTab?.filePath || null}
             onSearchResult={handleSearchResult}
-            onProjectRootChange={handleProjectRootChange}
+            onProjectRootChange={handleTrackDirectoryChange}
             onRefreshFileTreeCallback={setRefreshFileTreeCallback}
-            onFileRenamed={(oldPath: string, newPath: string) => handleFileRenamed(oldPath, newPath, updateTabPath)}
-            onFileDeleted={(filePath: string) => handleFileDeleted(filePath, closeTabByPath)}
+            onFileRenamed={(oldPath: string, newPath: string) => updateTabPath(oldPath, newPath)}
+            onFileDeleted={(filePath: string) => closeTabByPath(filePath)}
             externalProjectRoot={trackDirectoryPath}
           />
         </div>
+        {/* 垂直リサイザ */}
+        <div className="app-resizer" onMouseDown={handleResizerMouseDown} title="Drag to resize sidebar" />
 
         {/* エディタエリア または ウェルカムスクリーン */}
         <div className="app-editor-area">
@@ -314,7 +420,7 @@ const App: React.FC = () => {
                 tabs={tabs}
                 activeTabId={activeTabId}
                 draggedTabId={draggedTabId}
-                onTabSelect={setActiveTabId}
+                onTabSelect={setActiveBuffer}
                 onTabClose={closeTab}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -325,12 +431,13 @@ const App: React.FC = () => {
               {/* エディタコンテナ */}
               <EditorContainer
                 theme={theme}
-                activeTab={activeTab}
+                activeTab={activeTab || null}
                 getActiveTab={getActiveTab}
                 updateTab={updateTab}
                 onOpenFile={handleOpenFile}
                 onSaveFile={handleSaveFile}
                 onNewFile={handleNewFile}
+                onEditorChange={handleEditorChange}
                 onEditorReady={handleEditorReady}
               />
             </>
@@ -341,6 +448,7 @@ const App: React.FC = () => {
         </div>
       </div>
     </div>
+    </AppContext.Provider>
   );
 };
 

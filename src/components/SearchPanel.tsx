@@ -42,8 +42,9 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
     setIsSearching(true);
     try {
       // Electron APIを使用してファイル検索（プロジェクトルートを指定）
-      if (window.electronAPI) {
-        const searchResults = await window.electronAPI.searchInFiles(term, projectRoot);
+      const { electronClient } = require('../services/electronClient');
+      if (electronClient) {
+        const searchResults = await electronClient.searchInFiles(term, projectRoot);
         setResults(searchResults || []);
 
         // 統計情報を計算

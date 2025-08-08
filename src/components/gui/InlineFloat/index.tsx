@@ -1,469 +1,17 @@
 import * as monaco from 'monaco-editor';
+import { applyModelEdits } from '../../../utils/monacoUtils';
 import { FloatDetector, MarkerManager } from './markerUtils';
 import { SliderUI } from './sliderUI';
-import { injectInlineFloatStyles, removeInlineFloatStyles } from './styles';
-import { FloatMarker, IInlineFloatWidget, InlineFloatEvents } from './types';
+import { FloatMarker } from './types';
 import { blenderService } from '../../../services/blenderService';
 
-/**
- * インラインスライダーのMonaco Widget実装
- */
-export class InlineFloatWidget implements IInlineFloatWidget {
-  private static readonly WIDGET_ID = 'ernst.inlineFloat';
+// 旧 InlineFloatWidget 実装は削除（InlineFloatManager に統一）
 
-  private editor: monaco.editor.IStandaloneCodeEditor;
-  private markerManager: MarkerManager;
-  private sliderUI: SliderUI;
-  private isActive: boolean = false;
-  private currentMarker: FloatMarker | null = null;
-
-  constructor(editor: monaco.editor.IStandaloneCodeEditor) {
-    this.editor = editor;
-    this.markerManager = new MarkerManager(editor);
-
-    // スタイルを注入
-    injectInlineFloatStyles();
-
-    // SliderUIを初期化
-    this.sliderUI = new SliderUI(editor, {
-      onValueChange: this.handleValueChange.bind(this),
-      onConfirm: this.handleConfirm.bind(this),
-      onCancel: this.handleCancel.bind(this),
-      onActivate: this.handleActivate.bind(this),
-      onDeactivate: this.handleDeactivate.bind(this)
-    });
-
-    // エディタにWidget登録
-    this.editor.addContentWidget(this);
-
-    // ダブルクリックイベント監視
-    this.setupDoubleClickListener();
-  }
-
-  /**
-   * Widget ID
-   */
-  getId(): string {
-    return InlineFloatWidget.WIDGET_ID;
-  }
-
-  /**
-   * DOM要素を取得
-   */
-  getDomNode(): HTMLElement {
-    return this.sliderUI.getDomNode();
-  }
-
-  /**
-   * Widget位置を取得
-   */
-  getPosition(): monaco.editor.IContentWidgetPosition | null {
-    if (!this.isActive || !this.currentMarker) {
-      return null;
-    }
-
-    return {
-      position: this.currentMarker.position,
-      preference: [
-        monaco.editor.ContentWidgetPositionPreference.ABOVE,
-        monaco.editor.ContentWidgetPositionPreference.BELOW
-      ]
-    };
-  }
-
-  /**
-   * スライダーを表示
-   */
-  show(marker: FloatMarker): void {
-    this.currentMarker = marker;
-    this.isActive = true;
-
-    // 一時マーカーを追加
-    this.markerManager.addTemporaryMarker(marker);
-
-    // スライダーを表示
-    this.sliderUI.show(marker);
-
-    // Widget位置を更新
-    this.editor.layoutContentWidget(this);
-
-    console.log(`🎛️ Inline slider activated for value: ${marker.originalValue}`);
-  }
-
-  /**
-   * スライダーを非表示
-   */
-  hide(): void {
-    if (!this.isActive) return;
-
-    this.sliderUI.hide();
-    this.isActive = false;
-    this.currentMarker = null;
-
-    // Widget位置を更新（非表示）
-    this.editor.layoutContentWidget(this);
-  }
-
-  /**
-   * 値を更新
-   */
-  updateValue(value: number): void {
-    if (this.currentMarker) {
-      this.markerManager.updateMarkerValue(this.currentMarker.id, value);
-    }
-  }
-
-  /**
-   * 表示状態を取得
-   */
-  isVisible(): boolean {
-    return this.isActive;
-  }
-
-  /**
-   * リソースを解放
-   */
-  dispose(): void {
-    this.hide();
-    this.editor.removeContentWidget(this);
-    this.sliderUI.dispose();
-    this.markerManager.clearAllMarkers();
-    removeInlineFloatStyles();
-  }
-
-        /**
-   * ダブルクリック・右クリックリスナーを設定
-   */
-  private setupDoubleClickListener(): void {
-    console.log('🔧 Setting up event listeners for InlineFloat');
-
-    // 方法1: Monaco Editor API を使用（推奨）
-    this.setupMonacoEvents();
-
-    // 方法2: DOM イベント（フォールバック）
-    this.setupDOMEvents();
-  }
-
-  /**
-   * Monaco Editor APIイベントを設定
-   */
-  private setupMonacoEvents(): void {
-    console.log('🔧 Setting up Monaco Editor API events');
-
-    // Monaco Editor のダブルクリックイベント
-    let clickCount = 0;
-    let clickTimer: NodeJS.Timeout | null = null;
-    let lastClickPosition: monaco.IPosition | null = null;
-
-    this.editor.onMouseDown((e) => {
-      if (!e.target || !e.target.position) return;
-
-      clickCount++;
-      const currentPosition = e.target.position;
-
-      console.log(`🖱️ Monaco click ${clickCount} at position:`, currentPosition);
-
-      // ダブルクリック判定（500ms以内）
-      if (clickTimer) {
-        clearTimeout(clickTimer);
-        clickTimer = null;
-      }
-
-      if (clickCount === 2 && lastClickPosition &&
-          lastClickPosition.lineNumber === currentPosition.lineNumber &&
-          Math.abs(lastClickPosition.column - currentPosition.column) <= 3) {
-
-        console.log('🖱️ Double-click detected via Monaco API!');
-        this.handleDoubleClick(currentPosition);
-        clickCount = 0;
-        lastClickPosition = null;
-        return;
-      }
-
-      lastClickPosition = currentPosition;
-
-      clickTimer = setTimeout(() => {
-        clickCount = 0;
-        lastClickPosition = null;
-        clickTimer = null;
-      }, 500);
-    });
-
-    // 右クリック用のコンテキストメニューイベント
-    this.editor.onContextMenu((e) => {
-      console.log('🖱️ Monaco context menu detected!', e);
-      if (e.target && e.target.position) {
-        console.log('🖱️ Right-click detected via Monaco API!');
-        this.handleDoubleClick(e.target.position);
-      }
-    });
-
-    // キーボードショートカット追加（Ctrl+Shift+I）
-    this.editor.addAction({
-      id: 'ernst.triggerInlineSlider',
-      label: 'Trigger Inline Slider',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI],
-      run: (editor) => {
-        console.log('🎹 Keyboard shortcut (Ctrl+Shift+I) triggered!');
-        const position = editor.getPosition();
-        if (position) {
-          this.handleDoubleClick(position);
-        }
-      }
-    });
-
-    console.log('✅ Monaco Editor API events set up successfully');
-  }
-
-  /**
-   * DOM イベントを設定（フォールバック）
-   */
-  private setupDOMEvents(): void {
-    console.log('🔧 Setting up DOM events as fallback');
-
-        // メイン方法: 直接DOMイベント
-    const editorDom = this.editor.getDomNode();
-    if (editorDom) {
-      console.log('🔧 Editor DOM found:', editorDom);
-      console.log('🔧 Editor DOM classList:', editorDom.classList.toString());
-      console.log('🔧 Editor DOM children count:', editorDom.children.length);
-      console.log('🔧 Setting up DOM event listeners');
-
-      // より詳細なイベント設定
-      const clickHandler = (event: Event) => {
-        console.log('🖱️ DOM Click detected!', {
-          target: event.target,
-          currentTarget: event.currentTarget,
-          type: event.type,
-          coordinates: event instanceof MouseEvent ? {x: event.clientX, y: event.clientY} : null
-        });
-      };
-
-      const dblclickHandler = (event: MouseEvent) => {
-        console.log('🖱️ DOM Double-click detected!', event);
-        this.handleClickEvent(event, 'double-click');
-      };
-
-      const contextHandler = (event: MouseEvent) => {
-        console.log('🖱️ DOM Right-click detected!', event);
-        event.preventDefault();
-        this.handleClickEvent(event, 'right-click');
-      };
-
-      // イベントリスナーを追加
-      editorDom.addEventListener('click', clickHandler, true); // useCapture = true
-      editorDom.addEventListener('dblclick', dblclickHandler, true);
-      editorDom.addEventListener('contextmenu', contextHandler, true);
-
-      console.log('✅ DOM event listeners set up successfully');
-
-      // 実際にエディター領域をテスト
-      setTimeout(() => {
-        console.log('🔧 Testing DOM accessibility...');
-        const rect = editorDom.getBoundingClientRect();
-        console.log('🔧 Editor DOM rect:', rect);
-
-        // エディターの子要素も確認
-        const codeArea = editorDom.querySelector('.monaco-editor');
-        console.log('🔧 Monaco editor element found:', !!codeArea);
-
-        const textarea = editorDom.querySelector('textarea');
-        console.log('🔧 Textarea element found:', !!textarea);
-
-        // 内部要素にもイベントリスナーを追加（フォールバック）
-        const linesContent = editorDom.querySelector('.lines-content');
-        const viewLines = editorDom.querySelector('.view-lines');
-
-        console.log('🔧 Lines content found:', !!linesContent);
-        console.log('🔧 View lines found:', !!viewLines);
-
-        if (linesContent) {
-          console.log('🔧 Adding event listeners to lines-content');
-          linesContent.addEventListener('click', (event) => {
-            console.log('🖱️ Lines-content Click detected!', event);
-          }, true);
-
-          linesContent.addEventListener('dblclick', (event) => {
-            console.log('🖱️ Lines-content Double-click detected!', event);
-            this.handleClickEvent(event as MouseEvent, 'double-click');
-          }, true);
-
-          linesContent.addEventListener('contextmenu', (event) => {
-            console.log('🖱️ Lines-content Right-click detected!', event);
-            event.preventDefault();
-            this.handleClickEvent(event as MouseEvent, 'right-click');
-          }, true);
-        }
-
-        if (viewLines) {
-          console.log('🔧 Adding event listeners to view-lines');
-          viewLines.addEventListener('click', (event) => {
-            console.log('🖱️ View-lines Click detected!', event);
-          }, true);
-
-          viewLines.addEventListener('dblclick', (event) => {
-            console.log('🖱️ View-lines Double-click detected!', event);
-            this.handleClickEvent(event as MouseEvent, 'double-click');
-          }, true);
-
-          viewLines.addEventListener('contextmenu', (event) => {
-            console.log('🖱️ View-lines Right-click detected!', event);
-            event.preventDefault();
-            this.handleClickEvent(event as MouseEvent, 'right-click');
-          }, true);
-        }
-
-                // 全体のbodyにもテスト用リスナー追加
-        document.body.addEventListener('click', (event) => {
-          console.log('🖱️ Body Click detected!', {
-            target: event.target,
-            className: (event.target as Element)?.className
-          });
-        }, true);
-
-      }, 1000);
-    } else {
-      console.error('❌ Editor DOM not found!');
-    }
-  }
-
-  /**
-   * クリックイベント処理の共通ロジック
-   */
-  private handleClickEvent(event: MouseEvent, eventType: string): void {
-    console.log(`🖱️ Handling ${eventType} event`);
-
-    // Monaco Editorのターゲット取得
-    const target = this.editor.getTargetAtClientPoint(event.clientX, event.clientY);
-    console.log('🎯 Target at client point:', target);
-
-    if (target && target.position) {
-      console.log('✅ Position found via target:', target.position);
-      this.handleDoubleClick(target.position);
-    } else {
-      console.log('❌ Could not get position from client point, trying alternative method');
-
-      // 代替方法: カーソル位置を使用
-      const position = this.editor.getPosition();
-      if (position) {
-        console.log('✅ Using cursor position:', position);
-        this.handleDoubleClick(position);
-      } else {
-        console.log('❌ No position available');
-      }
-    }
-  }
-
-  /**
-   * ダブルクリック処理の共通ロジック
-   */
-  private handleDoubleClick(position: monaco.IPosition | null): void {
-    if (!position) {
-      console.log('❌ No position found');
-      return;
-    }
-
-    console.log('📍 Click position:', position);
-
-    const model = this.editor.getModel();
-    if (!model) {
-      console.log('❌ No model found');
-      return;
-    }
-
-    // 浮動小数点数を検出
-    const floatMatch = FloatDetector.detectFloatAtPosition(model, position);
-    console.log('🔍 Float detection result:', floatMatch);
-
-    if (!floatMatch) {
-      console.log('❌ No float found at position');
-      return;
-    }
-
-    console.log('✅ Float found:', floatMatch.value, 'at range:', floatMatch.range);
-
-    // 既に表示中の場合は非表示にする
-    if (this.isActive) {
-      console.log('🔄 Hiding existing slider');
-      this.hide();
-      return;
-    }
-
-    // マーカーを作成
-    const marker = this.markerManager.createMarker(floatMatch);
-    console.log('📝 Marker created:', marker.id);
-
-    // スライダーを表示
-    this.show(marker);
-    console.log('🎛️ Slider should now be visible');
-  }
-
-
-
-  /**
-   * 値変更ハンドラー
-   */
-  private handleValueChange(value: number): void {
-    this.updateValue(value);
-
-    // Blenderにリアルタイム送信
-    blenderService.sendUniformValue(value);
-  }
-
-  /**
-   * 確定ハンドラー
-   */
-  private handleConfirm(finalValue: number): void {
-    if (!this.currentMarker) return;
-
-    console.log(`✅ Inline slider confirmed: ${this.currentMarker.originalValue} → ${finalValue}`);
-
-    // マーカーを確定
-    this.markerManager.confirmMarker(this.currentMarker.id);
-
-    // 最終値をBlenderに送信
-    blenderService.sendUniformValue(finalValue);
-
-    this.hide();
-  }
-
-  /**
-   * キャンセルハンドラー
-   */
-  private handleCancel(originalValue: number): void {
-    if (!this.currentMarker) return;
-
-    console.log(`❌ Inline slider cancelled: reverted to ${originalValue}`);
-
-    // マーカーをキャンセル
-    this.markerManager.cancelMarker(this.currentMarker.id);
-
-    // 元の値をBlenderに送信
-    blenderService.sendUniformValue(originalValue);
-
-    this.hide();
-  }
-
-  /**
-   * アクティベーションハンドラー
-   */
-  private handleActivate(marker: FloatMarker): void {
-    console.log(`🎯 Inline slider activated for value: ${marker.originalValue}`);
-  }
-
-  /**
-   * 非アクティベーションハンドラー
-   */
-  private handleDeactivate(marker: FloatMarker): void {
-    console.log(`💤 Inline slider deactivated`);
-  }
-}
 
 /**
  * インラインスライダー統合クラス
  */
 export class InlineFloatManager {
-  private widget: InlineFloatWidget | null = null;
   private editor: monaco.editor.IStandaloneCodeEditor | null = null;
   private markerManager: MarkerManager | null = null;
   private sliderUI: SliderUI | null = null;
@@ -527,7 +75,8 @@ export class InlineFloatManager {
         const content = this.editor.getValue();
         console.log('💾 Attempting to save new file with content length:', content.length);
 
-        const result = await window.electronAPI.saveFileAs(content);
+        const { electronClient } = require('../../../services/electronClient');
+        const result = await electronClient.saveFileAs(content);
         console.log('💾 SaveFileAs result:', result);
 
         if (result && result.success && result.fileName && result.filePath) {
@@ -564,7 +113,8 @@ export class InlineFloatManager {
       console.log('💾 Saving file:', activeTab.filePath);
 
       // ElectronAPIで直接保存
-      const result = await window.electronAPI.saveFile(activeTab.filePath, content);
+      const { electronClient } = require('../../../services/electronClient');
+      const result = await electronClient.saveFile(activeTab.filePath, content);
 
       if (result.success) {
         console.log('✅ File saved successfully');
@@ -588,7 +138,7 @@ export class InlineFloatManager {
    * エディタに統合
    */
   integrate(editor: monaco.editor.IStandaloneCodeEditor): void {
-    if (this.widget) {
+    if (this.sliderUI || this.markerManager) {
       this.dispose();
     }
 
@@ -613,10 +163,6 @@ export class InlineFloatManager {
    * 統合を解除
    */
   dispose(): void {
-    if (this.widget) {
-      this.widget.dispose();
-      this.widget = null;
-    }
     if (this.sliderUI) {
       this.sliderUI.dispose();
       this.sliderUI = null;
@@ -765,10 +311,7 @@ export class InlineFloatManager {
     const model = this.editor.getModel();
 
     if (model) {
-      model.pushEditOperations([], [{
-        range: marker.range,
-        text: newText
-      }], () => null);
+      applyModelEdits(model, [{ range: marker.range, text: newText }]);
 
       console.log('🔧 Code modified from', originalText, 'to', newText);
 
@@ -792,7 +335,7 @@ export class InlineFloatManager {
       });
 
       // ファイルを保存（Blenderのホットリロードをトリガー）
-      await this.saveCurrentFile();
+      await this.saveCurrentFileIntegrated();
     }
 
     this.isActive = true;
@@ -847,15 +390,12 @@ export class InlineFloatManager {
           console.log('⭕ NO WRAPPING: Condition not met');
         }
 
-        model.pushEditOperations([], [{
-          range: this.originalRange,
-          text: newText
-        }], () => null);
+        applyModelEdits(model, [{ range: this.originalRange, text: newText }]);
 
         console.log('🔧 Code updated from', currentText, 'to', newText);
 
         // ファイルを保存
-        await this.saveCurrentFile();
+        await this.saveCurrentFileIntegrated();
       }
     }
     this.hideSlider();
@@ -876,15 +416,12 @@ export class InlineFloatManager {
         console.log('🔧 Current text in range:', currentText);
 
         // 元の値に戻す
-        model.pushEditOperations([], [{
-          range: this.originalRange,
-          text: this.originalValue
-        }], () => null);
+        applyModelEdits(model, [{ range: this.originalRange, text: this.originalValue }]);
 
         console.log('🔧 Code reverted from', currentText, 'to', this.originalValue);
 
         // ファイルを保存
-        await this.saveCurrentFile();
+        await this.saveCurrentFileIntegrated();
       }
     }
     this.hideSlider();
@@ -913,6 +450,28 @@ export class InlineFloatManager {
     }
     this.isActive = false;
     this.currentMarker = null;
+  }
+
+  /**
+   * 統合されたBufferManagerを使用したファイル保存
+   */
+  private async saveCurrentFileIntegrated(): Promise<void> {
+    try {
+      // グローバルアクセス経由で統合されたsaveActiveTabを呼び出し
+      const appCtx = (window as any).__ERNST_APP_CONTEXT__ as { saveActiveTab?: () => Promise<boolean> } | undefined;
+      if (appCtx && appCtx.saveActiveTab) {
+        const success = await appCtx.saveActiveTab();
+        console.log(success ? '✅ Integrated save successful' : '❌ Integrated save failed');
+      } else {
+        // フォールバック: 従来の保存方法
+        console.log('⚠️ Integrated save not available, using fallback');
+        await this.saveCurrentFile();
+      }
+    } catch (error) {
+      console.error('❌ Error in integrated save:', error);
+      // フォールバック: 従来の保存方法
+      await this.saveCurrentFile();
+    }
   }
 }
 

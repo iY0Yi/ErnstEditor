@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { blenderService } from './services/blenderService';
+import { IPC } from './constants/ipc';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingFileOpen: { filePath: string; trackPath: string | null } | null = null; // 起動時のファイル開く処理を保留
@@ -14,7 +15,6 @@ function findTrackDirectory(startPath: string): string | null {
   while (currentPath !== path.dirname(currentPath)) {
     const trackPath = path.join(currentPath, 'track');
     if (fs.existsSync(trackPath) && fs.statSync(trackPath).isDirectory()) {
-      console.log(`Found track directory: ${trackPath}`);
       return trackPath;
     }
     currentPath = path.dirname(currentPath);
@@ -23,14 +23,17 @@ function findTrackDirectory(startPath: string): string | null {
   return null;
 }
 
+// プロジェクト名を取得（trackディレクトリの親ディレクトリ名）
+function getProjectNameFromTrackPath(trackPath: string): string {
+  const projectPath = path.dirname(trackPath);
+  return path.basename(projectPath);
+}
+
 // コマンドライン引数からファイルパスを取得
 function getFilePathFromArgs(argv: string[]): { filePath: string; trackPath: string | null } | null {
   // 引数の例: ['electron', 'main.js', '"path/to/file.glsl"']
   // または: ['ErnstEditor.exe', '"path/to/file.glsl"']
 
-  console.log('🔍 All command line arguments:', argv);
-  console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
-  console.log('🔍 First argument (executable):', argv[0]);
 
   // デバッグ用：ログをファイルに出力
   try {
@@ -48,39 +51,26 @@ First arg: ${argv[0]}
   // 開発環境かプロダクション環境かを判定
   // electron で実行している場合は開発環境、ErnstEditor.exe の場合はプロダクション環境
   const isDevelopment = argv[0].includes('electron') && !argv[0].includes('ErnstEditor.exe');
-  console.log('🔍 Is development environment:', isDevelopment);
   const args = argv.slice(isDevelopment ? 2 : 1);
-  console.log('🔍 Processed arguments:', args);
 
   for (let i = 0; i < args.length; i++) {
     let arg = args[i];
-    console.log(`🔍 Processing arg[${i}]: "${arg}"`);
 
     // ダブルクォーテーションを除去
     if (arg.startsWith('"') && arg.endsWith('"')) {
       arg = arg.slice(1, -1);
-      console.log(`🔍 After quote removal: "${arg}"`);
     }
 
     // ファイルパスかどうかをチェック（--で始まるオプションは除外）
     if (!arg.startsWith('-')) {
-      console.log(`🔍 Checking if file exists: "${arg}"`);
       const exists = fs.existsSync(arg);
-      console.log(`🔍 File exists: ${exists}`);
 
       if (exists) {
         const resolvedPath = path.resolve(arg);
         const trackPath = findTrackDirectory(resolvedPath);
 
-        console.log(`CLI file path: ${resolvedPath}`);
-        if (trackPath) {
-          console.log(`CLI track directory: ${trackPath}`);
-        }
-
         return { filePath: resolvedPath, trackPath };
       }
-    } else {
-      console.log(`🔍 Skipping option: "${arg}"`);
     }
   }
 
@@ -95,21 +85,17 @@ function openFileInRenderer(filePath: string, trackPath?: string | null) {
       const content = fs.readFileSync(filePath, 'utf-8');
       const fileName = path.basename(filePath);
 
-      console.log(`📂 Opening file from command line: ${filePath}`);
-      console.log(`📄 File name: ${fileName}`);
-      console.log(`📝 Content length: ${content.length}`);
-      if (trackPath) {
-        console.log(`🗂️ Setting project root to track directory: ${trackPath}`);
-      }
+      // プロジェクト名を取得
+      const projectName = trackPath ? getProjectNameFromTrackPath(trackPath) : null;
 
-      mainWindow.webContents.send('file:open-from-cli', {
+      mainWindow.webContents.send(IPC.FILE_OPEN_FROM_CLI, {
         filePath,
         content,
         fileName,
-        trackPath: trackPath || null
+        trackPath: trackPath || null,
+        projectName: projectName || null
       });
 
-      console.log('✅ CLI file open command sent to renderer');
     } catch (error) {
       console.error(`❌ Failed to open file from command line: ${error}`);
     }
@@ -128,6 +114,7 @@ const createWindow = (): void => {
     frame: false, // ネイティブヘッダー（タイトルバー）を隠す
     backgroundColor: '#101010', // 読み込み中の背景色
     show: false, // 準備完了まで非表示
+    icon: path.join(__dirname, '../assets/icons/icons/icons/png/256x256.png'), // アプリアイコン
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -137,8 +124,9 @@ const createWindow = (): void => {
 
   mainWindow.loadFile('src/index.html');
 
-  // 開発環境でのみ開発者ツールを開く
-  if (process.env.NODE_ENV === 'development') {
+  // 開発環境でのみ開発者ツールを開く（パッケージ版では無効）
+  const isDevelopment = process.env.NODE_ENV === 'development' && !app.isPackaged;
+  if (isDevelopment) {
     mainWindow.webContents.openDevTools();
   }
 
@@ -146,10 +134,31 @@ const createWindow = (): void => {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
+
+  // F12キーで開発者ツール切り替え（EXE版でも有効）
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12') {
+      if (mainWindow?.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools();
+      } else {
+        mainWindow?.webContents.openDevTools();
+      }
+    }
+  });
+
+  // ウィンドウクローズ時の強制終了
+  mainWindow.on('closed', () => {
+    if (!isQuitting) {
+      // アプリ全体を強制終了
+      setTimeout(() => {
+        process.exit(0);
+      }, 100);
+    }
+  });
 };
 
 // ファイル操作のIPC処理
-ipcMain.handle('file:open', async (): Promise<{ filePath: string; content: string; fileName: string } | null> => {
+ipcMain.handle(IPC.FILE_OPEN, async (): Promise<{ filePath: string; content: string; fileName: string } | null> => {
   if (!mainWindow) return null;
 
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -175,7 +184,7 @@ ipcMain.handle('file:open', async (): Promise<{ filePath: string; content: strin
   return null;
 });
 
-ipcMain.handle('file:save', async (event: any, filePath: string, content: string): Promise<{ success: boolean; error?: string }> => {
+ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: string): Promise<{ success: boolean; error?: string }> => {
   try {
     fs.writeFileSync(filePath, content, 'utf-8');
     return { success: true };
@@ -185,7 +194,7 @@ ipcMain.handle('file:save', async (event: any, filePath: string, content: string
   }
 });
 
-ipcMain.handle('file:saveAs', async (event: any, content: string): Promise<{ success: boolean; filePath?: string; fileName?: string; error?: string }> => {
+ipcMain.handle(IPC.FILE_SAVE_AS, async (event: any, content: string): Promise<{ success: boolean; filePath?: string; fileName?: string; error?: string }> => {
   if (!mainWindow) return { success: false, error: 'No main window available' };
 
   const result = await dialog.showSaveDialog(mainWindow, {
@@ -215,7 +224,7 @@ ipcMain.handle('file:saveAs', async (event: any, content: string): Promise<{ suc
 });
 
 // ファイルエクスプローラー用のIPC処理
-ipcMain.handle('folder:open', async (): Promise<{ files: any[]; rootPath: string } | null> => {
+ipcMain.handle(IPC.FOLDER_OPEN, async (): Promise<{ files: any[]; rootPath: string } | null> => {
   if (!mainWindow) return null;
 
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -230,7 +239,7 @@ ipcMain.handle('folder:open', async (): Promise<{ files: any[]; rootPath: string
   return null;
 });
 
-ipcMain.handle('folder:refresh', async (event: any, folderPath: string): Promise<{ files: any[] } | null> => {
+ipcMain.handle(IPC.FOLDER_REFRESH, async (event: any, folderPath: string): Promise<{ files: any[] } | null> => {
   try {
     const files = await buildFileTree(folderPath);
     return { files };
@@ -240,7 +249,7 @@ ipcMain.handle('folder:refresh', async (event: any, folderPath: string): Promise
   }
 });
 
-ipcMain.handle('file:read', async (event: any, filePath: string): Promise<string | null> => {
+ipcMain.handle(IPC.FILE_READ, async (event: any, filePath: string): Promise<string | null> => {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
     return content;
@@ -250,7 +259,7 @@ ipcMain.handle('file:read', async (event: any, filePath: string): Promise<string
   }
 });
 
-ipcMain.handle('file:rename', async (event: any, oldPath: string, newPath: string): Promise<{ success: boolean; error?: string }> => {
+ipcMain.handle(IPC.FILE_RENAME, async (event: any, oldPath: string, newPath: string): Promise<{ success: boolean; error?: string }> => {
   try {
     fs.renameSync(oldPath, newPath);
     return { success: true };
@@ -260,7 +269,7 @@ ipcMain.handle('file:rename', async (event: any, oldPath: string, newPath: strin
   }
 });
 
-ipcMain.handle('file:delete', async (event: any, filePath: string): Promise<{ success: boolean; error?: string }> => {
+ipcMain.handle(IPC.FILE_DELETE, async (event: any, filePath: string): Promise<{ success: boolean; error?: string }> => {
   try {
     const stats = fs.statSync(filePath);
     if (stats.isDirectory()) {
@@ -276,7 +285,7 @@ ipcMain.handle('file:delete', async (event: any, filePath: string): Promise<{ su
 });
 
 // ファイル移動
-ipcMain.handle('file:move', async (event: any, sourcePath: string, targetDir: string): Promise<{ success: boolean; error?: string }> => {
+ipcMain.handle(IPC.FILE_MOVE, async (event: any, sourcePath: string, targetDir: string): Promise<{ success: boolean; error?: string }> => {
   try {
     const fileName = path.basename(sourcePath);
     const newPath = path.join(targetDir, fileName);
@@ -334,13 +343,13 @@ async function buildFileTree(dirPath: string): Promise<any[]> {
 }
 
 // ウィンドウコントロール用のIPC処理
-ipcMain.handle('window:minimize', async (): Promise<void> => {
+ipcMain.handle(IPC.WINDOW_MINIMIZE, async (): Promise<void> => {
   if (mainWindow) {
     mainWindow.minimize();
   }
 });
 
-ipcMain.handle('window:maximize', async (): Promise<void> => {
+ipcMain.handle(IPC.WINDOW_MAXIMIZE, async (): Promise<void> => {
   if (mainWindow) {
     if (mainWindow.isMaximized()) {
       mainWindow.unmaximize();
@@ -350,14 +359,14 @@ ipcMain.handle('window:maximize', async (): Promise<void> => {
   }
 });
 
-ipcMain.handle('window:close', async (): Promise<void> => {
+ipcMain.handle(IPC.WINDOW_CLOSE, async (): Promise<void> => {
   if (mainWindow) {
     mainWindow.close();
   }
 });
 
 // テーマ読み込み用のIPC処理
-ipcMain.handle('theme:load', async (event: any, themeName: string = 'ernst-dark'): Promise<any> => {
+ipcMain.handle(IPC.THEME_LOAD, async (event: any, themeName: string = 'ernst-dark'): Promise<any> => {
   try {
     // 開発環境とビルド環境の両方に対応
     let themePath: string;
@@ -382,7 +391,7 @@ ipcMain.handle('theme:load', async (event: any, themeName: string = 'ernst-dark'
 });
 
 // 全文検索のIPC処理
-ipcMain.handle('search:files', async (_, searchTerm: string, projectRoot?: string): Promise<any[]> => {
+ipcMain.handle(IPC.SEARCH_FILES, async (_, searchTerm: string, projectRoot?: string): Promise<any[]> => {
   if (!searchTerm || !searchTerm.trim()) {
     return [];
   }
@@ -413,7 +422,7 @@ ipcMain.handle('search:files', async (_, searchTerm: string, projectRoot?: strin
 });
 
 // Blender接続状態のIPC処理
-ipcMain.handle('blender:get-connection-status', async (): Promise<{
+ipcMain.handle(IPC.BLENDER_GET_CONNECTION_STATUS, async (): Promise<{
   isServerRunning: boolean;
   isBlenderConnected: boolean;
   clientCount: number;
@@ -432,12 +441,9 @@ ipcMain.handle('blender:get-connection-status', async (): Promise<{
 });
 
 // レンダラー準備完了通知の処理
-ipcMain.handle('renderer:ready', async (): Promise<void> => {
-  console.log('🎯 Renderer is ready!');
-
+ipcMain.handle(IPC.RENDERER_READY, async (): Promise<void> => {
   // 保留中のファイル開く処理があれば実行
   if (pendingFileOpen) {
-    console.log('📂 Opening pending file:', pendingFileOpen.filePath);
     try {
       openFileInRenderer(pendingFileOpen.filePath, pendingFileOpen.trackPath);
       pendingFileOpen = null; // 処理完了後はクリア
@@ -448,17 +454,14 @@ ipcMain.handle('renderer:ready', async (): Promise<void> => {
 });
 
 // Blender直接通信テスト用のIPC処理
-ipcMain.handle('blender:send-test-value', async (event: any, value: number): Promise<{
+ipcMain.handle(IPC.BLENDER_SEND_TEST_VALUE, async (event: any, value: number): Promise<{
   success: boolean;
   error?: string;
 }> => {
   try {
-    console.log(`🧪 IPC: Testing direct value send: ${value}`);
 
     // 詳細な状態ログを出力
     const status = blenderService.getConnectionStatus();
-    console.log('🔍 IPC: Current Blender status:', status);
-    console.log('🔍 IPC: isConnected():', blenderService.isConnected());
 
     // 直接送信を試行
     blenderService.sendUniformValue(value);
@@ -571,7 +574,6 @@ if (!gotTheLock) {
       mainWindow.focus();
 
       // コマンドライン引数からファイルパスを取得して開く
-      console.log('🔍 Second instance command line:', commandLine);
       const result = getFilePathFromArgs(commandLine);
       if (result) {
         openFileInRenderer(result.filePath, result.trackPath);
@@ -586,33 +588,29 @@ app.whenReady().then(async () => {
   createWindow();
 
   // 起動時のコマンドライン引数をチェック
-  console.log('🔍 Startup command line check');
   const result = getFilePathFromArgs(process.argv);
   if (result) {
-    console.log('✅ File found in startup arguments, waiting for renderer ready');
     // レンダラーが準備完了したらファイルを開く
     pendingFileOpen = result;
   } else {
     console.log('⚠️ No file found in startup arguments');
   }
 
-  console.log('🔄 Proceeding to Blender Service startup...');
 
   // Blender WebSocket サービスを開始
-  console.log('🚀 Starting Blender WebSocket Service...');
+  console.log('Starting Blender WebSocket Service...');
   try {
     await blenderService.start();
-    console.log('✅ Ernst Editor WebSocket Server started on port 8765');
 
     // Blender接続状態変更を監視してrendererに通知
     blenderService.onConnectionChange((connected) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('blender:connection-changed', connected);
-        console.log('📡 Sent Blender connection status to renderer:', connected);
+      mainWindow.webContents.send(IPC.BLENDER_CONNECTION_CHANGED, connected);
+        console.log('Sent Blender connection status to renderer:', connected);
       }
     });
   } catch (error) {
-    console.error('❌ Failed to start WebSocket Server:', error);
+    console.error('Failed to start WebSocket Server:', error);
   }
 
   app.on('activate', () => {
@@ -630,21 +628,12 @@ app.on('before-quit', async (event) => {
     isQuitting = true;
     event.preventDefault(); // 一旦終了を止める
 
-    console.log('🧹 Starting cleanup process...');
-
-    // 実行中のタイマーをクリア
-    startupTimers.forEach(timerId => {
-      clearTimeout(timerId);
-    });
-    startupTimers = [];
-    console.log('🧹 Startup timers cleared');
-
     // Blender WebSocket サービスを停止
     try {
       await blenderService.stop();
-      console.log('🛑 Ernst Editor WebSocket Server stopped');
-    } catch (error) {
-      console.error('❌ Failed to stop WebSocket Server:', error);
+      console.log('Ernst Editor WebSocket Server stopped');
+      } catch (error) {
+      console.error('Failed to stop WebSocket Server:', error);
     }
 
     // mainWindowを明示的にクローズ
@@ -653,12 +642,53 @@ app.on('before-quit', async (event) => {
       mainWindow = null;
     }
 
-    console.log('✅ Cleanup completed, quitting app');
-
-    // 少し待ってから最終的に終了
+    // 段階的終了処理
     setTimeout(() => {
       app.exit(0);
     }, 100);
+
+    setTimeout(() => {
+      process.exit(0);
+    }, 300);
+
+    setTimeout(() => {
+      // 最終手段：すべての子プロセスを強制終了
+      if (process.platform === 'win32') {
+        require('child_process').exec('taskkill /F /T /PID ' + process.pid);
+      } else {
+        process.kill(process.pid, 'SIGKILL');
+      }
+    }, 500);
+  }
+});
+
+// セッション保存・読み込み用IPC
+import { saveSession, loadSession, sessionExists } from './services/sessionService';
+
+ipcMain.handle(IPC.SESSION_SAVE, async (event: any, sessionData: any, trackPath: string) => {
+  try {
+    return await saveSession(sessionData, trackPath);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
+});
+
+ipcMain.handle(IPC.SESSION_LOAD, async (event: any, trackPath: string) => {
+  try {
+    return await loadSession(trackPath);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
+});
+
+ipcMain.handle(IPC.SESSION_EXISTS, async (event: any, trackPath: string) => {
+  try {
+    return sessionExists(trackPath);
+  } catch (error) {
+    console.error('❌ Error checking session existence:', error);
+    return false;
   }
 });
 

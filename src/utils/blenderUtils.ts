@@ -11,8 +11,9 @@
 export async function sendValueToBlender(value: number): Promise<boolean> {
   try {
     // IPC経由でメインプロセスのblenderServiceを使用
-    if (window.electronAPI && (window.electronAPI as any).sendTestValueToBlender) {
-      const result = await (window.electronAPI as any).sendTestValueToBlender(value);
+  const { electronClient } = require('../services/electronClient');
+  if (electronClient && (electronClient as any).sendTestValueToBlender) {
+    const result = await (electronClient as any).sendTestValueToBlender(value);
       if (!result.success) {
         console.error('❌ BlenderUtils: Failed to send via IPC:', result.error);
         return false;
@@ -34,8 +35,9 @@ export async function sendValueToBlender(value: number): Promise<boolean> {
  */
 export async function checkBlenderConnection(): Promise<boolean> {
   try {
-    if (window.electronAPI && window.electronAPI.getBlenderConnectionStatus) {
-      const status = await window.electronAPI.getBlenderConnectionStatus();
+  const { electronClient } = require('../services/electronClient');
+  if (electronClient && electronClient.getBlenderConnectionStatus) {
+    const status = await electronClient.getBlenderConnectionStatus();
       return status.isBlenderConnected;
     }
     return false;
@@ -51,8 +53,9 @@ export async function checkBlenderConnection(): Promise<boolean> {
  */
 export async function forceStartBlenderServer(): Promise<boolean> {
   try {
-    if (window.electronAPI && (window.electronAPI as any).forceStartBlenderServer) {
-      const result = await (window.electronAPI as any).forceStartBlenderServer();
+  const { electronClient } = require('../services/electronClient');
+  if (electronClient && (electronClient as any).forceStartBlenderServer) {
+    const result = await (electronClient as any).forceStartBlenderServer();
       return result.success;
     }
     return false;

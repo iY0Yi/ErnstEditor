@@ -6,12 +6,8 @@ import * as monaco from 'monaco-editor';
 import { FloatDetector } from '../InlineFloat/markerUtils';
 import { FloatMatch } from './types';
 import { NudgeboxWidget } from './NudgeboxWidget';
-import {
-  detectFloatAtPositionOrSelection,
-  createRange,
-  UNIFORM_NAME,
-  IPC_CHANNELS
-} from './utils';
+import { detectFloatAtPositionOrSelection, createRange, UNIFORM_NAME, IPC_CHANNELS } from './utils';
+import { applyModelEdits } from '../../../utils/monacoUtils';
 import { sendValueToBlender } from '../../../utils/blenderUtils';
 
 /**
@@ -80,10 +76,7 @@ export class InlineNudgeboxManager {
     const model = this.editor.getModel();
     if (!model) return;
 
-    model.pushEditOperations([], [{
-      range: floatMatch.range,
-      text: UNIFORM_NAME
-    }], () => null);
+    applyModelEdits(model, [{ range: floatMatch.range, text: UNIFORM_NAME }]);
 
     // 置換後の範囲を保存（u_inline1fの範囲）
     this.originalRange = createRange(
@@ -116,8 +109,8 @@ export class InlineNudgeboxManager {
     // 初期値をBlenderに送信
     this.sendValueToBlenderInternal(floatMatch.value);
 
-    // ファイル保存
-    this.saveCurrentFile();
+    // ファイル保存（統合されたBufferManagerを使用）
+    this.saveCurrentFileIntegrated();
   }
 
   /**
@@ -134,12 +127,9 @@ export class InlineNudgeboxManager {
           newText = `(${value})`;
         }
 
-        model.pushEditOperations([], [{
-          range: this.originalRange,
-          text: newText
-        }], () => null);
+        applyModelEdits(model, [{ range: this.originalRange, text: newText }]);
 
-        await this.saveCurrentFile();
+        await this.saveCurrentFileIntegrated();
       }
     }
     this.hideNudgebox();
@@ -153,15 +143,12 @@ export class InlineNudgeboxManager {
       const model = this.editor.getModel();
       if (model) {
         // 元の値に戻す
-        model.pushEditOperations([], [{
-          range: this.originalRange,
-          text: this.currentMatch.text
-        }], () => null);
+        applyModelEdits(model, [{ range: this.originalRange, text: this.currentMatch.text }]);
 
         // Blenderに元の値を送信（復旧）
         await this.sendValueToBlenderInternal(this.currentMatch.value);
 
-        await this.saveCurrentFile();
+        await this.saveCurrentFileIntegrated();
       }
     }
     this.hideNudgebox();
@@ -202,10 +189,12 @@ export class InlineNudgeboxManager {
    */
   private getActiveTab(): any {
     // Appコンポーネントのアクティブタブを直接参照
-    const app = (window as any).__ERNST_APP_INSTANCE__;
-    if (app && app.getActiveTab) {
-      return app.getActiveTab();
-    }
+    try {
+      const appCtx = (window as any).__ERNST_APP_CONTEXT__ as { getActiveTab?: () => any } | undefined;
+      if (appCtx && appCtx.getActiveTab) {
+        return appCtx.getActiveTab();
+      }
+    } catch {}
     console.error('❌ Nudgebox: Cannot access latest active tab');
     return null;
   }
@@ -216,10 +205,10 @@ export class InlineNudgeboxManager {
   private async saveCurrentFile(): Promise<void> {
     try {
       const activeTab = this.getActiveTab(); // 動的に最新のアクティブタブを取得
-      console.log('🔍 DEBUG: Nudgebox saveCurrentFile - activeTab:', activeTab?.fileName, activeTab?.filePath);
       if (activeTab && activeTab.filePath && this.editor) {
         const content = this.editor.getValue();
-        const result = await window.electronAPI.saveFile(activeTab.filePath, content);
+        const { electronClient } = require('../../../services/electronClient');
+        const result = await electronClient.saveFile(activeTab.filePath, content);
 
         if (result.success) {
           this.updateTabCallback(activeTab.id, {
@@ -232,6 +221,28 @@ export class InlineNudgeboxManager {
       }
     } catch (error) {
       console.error('❌ Error saving file:', error);
+    }
+  }
+
+  /**
+   * 統合されたBufferManagerを使用したファイル保存
+   */
+  private async saveCurrentFileIntegrated(): Promise<void> {
+    try {
+      // グローバルアクセス経由で統合されたsaveActiveTabを呼び出し
+      const appCtx = (window as any).__ERNST_APP_CONTEXT__ as { saveActiveTab?: () => Promise<boolean> } | undefined;
+      if (appCtx && appCtx.saveActiveTab) {
+        const success = await appCtx.saveActiveTab();
+        console.log(success ? '✅ Integrated save successful' : '❌ Integrated save failed');
+      } else {
+        // フォールバック: 従来の保存方法
+        console.log('⚠️ Integrated save not available, using fallback');
+        await this.saveCurrentFile();
+      }
+    } catch (error) {
+      console.error('❌ Error in integrated save:', error);
+      // フォールバック: 従来の保存方法
+      await this.saveCurrentFile();
     }
   }
 

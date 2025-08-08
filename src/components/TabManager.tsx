@@ -3,7 +3,7 @@ import { FileTab } from '../types';
 
 interface TabManagerProps {
   tabs: FileTab[];
-  activeTabId: string;
+  activeTabId: string | null;
   draggedTabId: string | null;
   onTabSelect: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
@@ -34,12 +34,15 @@ const TabManager: React.FC<TabManagerProps> = ({
             onDragOver={onDragOver}
             onDrop={(e) => onDrop(e, tab.id)}
             onDragEnd={onDragEnd}
-            className={`tab-item ${tab.id === activeTabId ? 'active' : ''} ${draggedTabId === tab.id ? 'dragging' : ''}`}
+            className={`tab-item ${tab.id === activeTabId ? 'active' : ''} ${draggedTabId === tab.id ? 'dragging' : ''} ${tab.isModified ? 'modified' : ''}`}
             onClick={() => onTabSelect(tab.id)}
           >
             <span className="tab-filename">
-              {tab.fileName}{tab.isModified ? ' •' : ''}
+              {tab.fileName}
             </span>
+            {tab.isModified && (
+              <span className="tab-modified-dot"></span>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
