@@ -41,7 +41,10 @@ export class InlineNudgeboxManager {
     // Alt+X: 起動 or キャンセル（トグル）
     this.editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyX, () => {
       if (this.widget) {
-        this.handleCancel();
+        // Alt+X で確定
+        try {
+          (this.widget as any).triggerConfirm?.();
+        } catch {}
       } else {
         this.tryActivateNudgebox();
       }

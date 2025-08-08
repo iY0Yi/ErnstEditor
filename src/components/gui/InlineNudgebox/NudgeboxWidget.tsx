@@ -67,20 +67,20 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
    * イベントリスナーをセットアップ
    */
   private setupEventListeners(): void {
-    // Enter: 確定、Alt+X: キャンセル、矢印キー: 精度制御
+    // Alt+X: 確定、ESC: キャンセル、矢印キー: 精度制御
     this.numberInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      if ((e as KeyboardEvent).altKey && (e.key === 'x' || e.key === 'X')) {
         e.preventDefault();
         e.stopPropagation();
         this.confirm();
-      } else if ((e as KeyboardEvent).altKey && (e.key === 'x' || e.key === 'X')) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.cancel();
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
         this.handleArrowKeyStep(e);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.cancel();
       }
     });
 
@@ -113,6 +113,21 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
    */
   private cancel(): void {
     this.options.onCancel();
+  }
+
+  /**
+   * 現在の入力値を取得（数値でなければ null）
+   */
+  public getCurrentValue(): number | null {
+    const value = parseFloat(this.numberInput.value);
+    return isNaN(value) ? null : value;
+  }
+
+  /**
+   * 外部から確定をトリガー
+   */
+  public triggerConfirm(): void {
+    this.confirm();
   }
 
   /**
