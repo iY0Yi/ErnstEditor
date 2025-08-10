@@ -262,6 +262,13 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
     const adjustment = calculatePositionAdjustment(this.options.editor);
     this.domNode.style.transform = `translateY(${adjustment.translateY}px)`;
 
+    // 位置の再評価（未フォーマットで行幅が変わったケースに備える）
+    try {
+      if (this.position && this.options.range) {
+        this.setPosition(this.options.range);
+      }
+    } catch {}
+
     // メインボックスのサイズも調整
     const mainBox = this.domNode.querySelector('.inline-nudgebox-main') as HTMLElement;
     if (mainBox) {

@@ -19,6 +19,7 @@ export class InlineNudgeboxManager {
   private currentMatch: FloatMatch | null = null;
   private originalRange: monaco.IRange | null = null;
   private updateTabCallback: (tabId: string, updates: any) => void;
+  private layoutListener: monaco.IDisposable | null = null;
 
   constructor(
     updateTabCallback: (tabId: string, updates: any) => void
@@ -32,6 +33,17 @@ export class InlineNudgeboxManager {
   public integrate(editor: monaco.editor.IStandaloneCodeEditor): void {
     this.editor = editor;
     this.setupKeyBindings();
+
+    // レイアウト変化で位置・サイズを追従
+    this.layoutListener?.dispose();
+    this.layoutListener = this.editor.onDidLayoutChange(() => {
+      if (this.widget && this.currentMatch) {
+        try {
+          this.widget.setPosition(this.currentMatch.range);
+          this.widget.updateSizeForCurrentZoom();
+        } catch {}
+      }
+    });
   }
 
   /**
@@ -110,11 +122,8 @@ export class InlineNudgeboxManager {
       this.widget?.focus();
     }, 15); // 少し長めに遅延
 
-    // 初期値をBlenderに送信
+    // 初期値をBlenderに送信（保存はしない。保存は確定/キャンセル時のみ）
     this.sendValueToBlenderInternal(floatMatch.value);
-
-    // ファイル保存（統合されたBufferManagerを使用）
-    this.saveCurrentFileIntegrated();
   }
 
   /**
@@ -133,10 +142,20 @@ export class InlineNudgeboxManager {
 
         applyModelEdits(model, [{ range: this.originalRange, text: newText }]);
 
+        // 保存（整形後にカーソルを末尾へ戻す）
         await this.saveCurrentFileIntegrated();
+
+        // キャレット位置を新しい数値の末尾へ
+        try {
+          const pos = { lineNumber: this.originalRange.startLineNumber, column: this.originalRange.startColumn + newText.length };
+          this.editor.setPosition(pos);
+          this.editor.revealPositionInCenterIfOutsideViewport(pos);
+        } catch {}
       }
     }
     this.hideNudgebox();
+    // エディタにフォーカスを戻す
+    try { this.editor.focus(); } catch {}
   }
 
   /**
@@ -153,9 +172,18 @@ export class InlineNudgeboxManager {
         await this.sendValueToBlenderInternal(this.currentMatch.value);
 
         await this.saveCurrentFileIntegrated();
+
+        // キャレット位置を元の数値の末尾へ
+        try {
+          const pos = { lineNumber: this.originalRange.startLineNumber, column: this.originalRange.startColumn + this.currentMatch.text.length };
+          this.editor.setPosition(pos);
+          this.editor.revealPositionInCenterIfOutsideViewport(pos);
+        } catch {}
       }
     }
     this.hideNudgebox();
+    // エディタにフォーカスを戻す
+    try { this.editor.focus(); } catch {}
   }
 
   /**
@@ -268,5 +296,7 @@ export class InlineNudgeboxManager {
    */
   public dispose(): void {
     this.hideNudgebox();
+    this.layoutListener?.dispose();
+    this.layoutListener = null;
   }
 }
