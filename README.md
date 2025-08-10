@@ -88,9 +88,21 @@ ErnstEditor.exe "path/to/shader.glsl"
 - Minimap enabled, right side, `showSlider: 'always'`
 - `wordWrap: 'on'`
 
+## Clang-Format on Save (GLSL)
+- Format runs automatically on save for GLSL files
+- Targets: `.glsl`, `.glslinc`, `.vert`, `.frag`, `.geom`, `.comp`, `.tesc`, `.tese`, `.vs`, `.fs`, `.vertex`, `.fragment`, `.shader`
+- Uses your project-local `.clang-format` (searched from the file’s directory upward)
+- Implementation: formatting is executed in the main process via `clang-format` (stdin/stdout). If formatting fails, save continues without formatting
+- No toggle in UI; if you don’t want formatting, remove/adjust `.clang-format` in your project or build a custom binary without the formatter hook
+
+### Notes
+- Windows-only integration. The editor bundles `clang-format` via npm for development; packaged builds also try several common locations and PATH
+- Common brace style can be configured via `.clang-format` (e.g. `BreakBeforeBraces: Allman`)
+
 ## Troubleshooting
 - Values not reflected in Blender: restart Blender and check the connection
 - Port 8765 is in use: resolve the conflict or free the port
+- Formatting error: ensure `clang-format` is available (PATH or bundled), and `.clang-format` exists at or above your project root
 
 ## Requirements
 - Windows 10+ (x64)

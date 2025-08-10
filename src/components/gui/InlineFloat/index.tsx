@@ -119,14 +119,29 @@ export class InlineFloatManager {
       if (result.success) {
         console.log('✅ File saved successfully');
 
+        // clang-format により変更があればモデル反映
+        const updated = (result as any).formattedContent && typeof (result as any).formattedContent === 'string'
+          ? (result as any).formattedContent
+          : content;
+        if (updated !== content) {
+          try {
+            const model = this.editor?.getModel?.();
+            if (model) {
+              const { applyModelEdits } = require('../../utils/monacoUtils');
+              const fullRange = model.getFullModelRange();
+              applyModelEdits(model, [{ range: fullRange, text: updated }]);
+            }
+          } catch {}
+        }
+
         // タブ情報を更新
         if (this.updateTabCallback) {
           this.updateTabCallback(activeTab.id, {
             isModified: false,
-            content: content
+            content: (result as any).formattedContent ?? content
           });
         }
-            } else {
+      } else {
         console.error('❌ Failed to save file:', result.error);
       }
     } catch (error) {

@@ -370,12 +370,26 @@ export function useBufferManager({
 
       const content = editorInstance.getValue();
 
-      // ファイルに保存
+      // ファイルに保存（GLSLはメイン側でclang-formatが走る）
       if (electronClient) {
         const result = await electronClient.saveFile(activeTab.filePath, content);
         if (result.success) {
+          const updatedContent = (result as any).formattedContent && typeof (result as any).formattedContent === 'string'
+            ? (result as any).formattedContent
+            : content;
+
+          // Monacoモデルにも反映
+          try {
+            const model = activeTab.model;
+            if (model && updatedContent !== model.getValue()) {
+              const { applyModelEdits } = require('../utils/monacoUtils');
+              const fullRange = model.getFullModelRange();
+              applyModelEdits(model, [{ range: fullRange, text: updatedContent }]);
+            }
+          } catch {}
+
           // isModifiedをfalseに更新
-          updateTab(activeTab.id, { isModified: false, content });
+          updateTab(activeTab.id, { isModified: false, content: updatedContent });
           console.log('📚BufferManager: File saved successfully');
           return true;
         } else {

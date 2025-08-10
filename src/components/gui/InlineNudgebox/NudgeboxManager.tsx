@@ -215,8 +215,21 @@ export class InlineNudgeboxManager {
         const result = await electronClient.saveFile(activeTab.filePath, content);
 
         if (result.success) {
+          const updated = (result as any).formattedContent && typeof (result as any).formattedContent === 'string'
+            ? (result as any).formattedContent
+            : content;
+          if (updated !== content) {
+            try {
+              const model = this.editor.getModel?.();
+              if (model) {
+                const { applyModelEdits } = require('../../../utils/monacoUtils');
+                const fullRange = model.getFullModelRange();
+                applyModelEdits(model, [{ range: fullRange, text: updated }]);
+              }
+            } catch {}
+          }
           this.updateTabCallback(activeTab.id, {
-            content,
+            content: (result as any).formattedContent ?? content,
             isModified: false
           });
         } else {

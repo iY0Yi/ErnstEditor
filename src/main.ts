@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { blenderService } from './services/blenderService';
 import { IPC } from './constants/ipc';
+import { execFile } from 'child_process';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingFileOpen: { filePath: string; trackPath: string | null } | null = null; // 起動時のファイル開く処理を保留
@@ -184,8 +185,62 @@ ipcMain.handle(IPC.FILE_OPEN, async (): Promise<{ filePath: string; content: str
   return null;
 });
 
-ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: string): Promise<{ success: boolean; error?: string }> => {
+ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: string): Promise<{ success: boolean; error?: string; formattedContent?: string }> => {
   try {
+    const ext = path.extname(filePath).toLowerCase();
+    const isGLSL = ['.glsl', '.glslinc', '.vert', '.frag', '.geom', '.comp', '.tesc', '.tese', '.vs', '.fs', '.vertex', '.fragment', '.shader'].includes(ext);
+
+    // フォーマット適用（GLSL系のみ）
+    if (isGLSL) {
+      const formatted = await new Promise<string | null>((resolve) => {
+        const args = ['-style=file', `--assume-filename=${filePath}`];
+        const attemptExec = (binPath: string, next: () => void) => {
+          try {
+            const child = execFile(binPath, args, { cwd: path.dirname(filePath) }, (err, stdout) => {
+              if (err) {
+                next();
+                return;
+              }
+              resolve(stdout || null);
+            });
+            if (child.stdin) {
+              child.stdin.write(content);
+              child.stdin.end();
+            }
+          } catch {
+            next();
+          }
+        };
+
+        const candidates: string[] = [
+          'clang-format',
+          // Windows npm scripts経由（開発時）
+          path.join(process.cwd(), 'node_modules', '.bin', 'clang-format.cmd'),
+          path.join(process.cwd(), 'node_modules', '.bin', 'clang-format.exe'),
+          path.join(process.cwd(), 'node_modules', 'clang-format', 'bin', 'win32', 'clang-format.exe'),
+          // パッケージ環境の候補
+          path.join(process.resourcesPath || '', 'app', 'node_modules', '.bin', 'clang-format.exe'),
+          path.join(process.resourcesPath || '', 'app', 'node_modules', 'clang-format', 'bin', 'win32', 'clang-format.exe')
+        ].filter(Boolean);
+
+        let idx = 0;
+        const next = () => {
+          if (idx >= candidates.length) {
+            resolve(null);
+            return;
+          }
+          const bin = candidates[idx++];
+          attemptExec(bin, next);
+        };
+        next();
+      });
+
+      const textToWrite = typeof formatted === 'string' && formatted.length > 0 ? formatted : content;
+      fs.writeFileSync(filePath, textToWrite, 'utf-8');
+      return { success: true, formattedContent: formatted ?? undefined };
+    }
+
+    // 非GLSLはそのまま保存
     fs.writeFileSync(filePath, content, 'utf-8');
     return { success: true };
   } catch (error) {

@@ -4,7 +4,7 @@ import { IPC } from './constants/ipc';
 interface ElectronAPI {
   // 既存のファイル操作API
   openFile: () => Promise<{ filePath: string; content: string; fileName: string } | null>;
-  saveFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+  saveFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string; formattedContent?: string }>;
   saveFileAs: (content: string) => Promise<{ success: boolean; filePath?: string; fileName?: string; error?: string }>;
 
   // ファイルエクスプローラー用API
