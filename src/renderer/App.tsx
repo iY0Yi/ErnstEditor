@@ -279,6 +279,7 @@ const App: React.FC = () => {
     setTrackDirectoryPath(trackPath);
     if (trackPath) {
       handleProjectRootChange(trackPath);
+      try { (window as any).__ERNST_PROJECT_ROOT__ = trackPath; } catch {}
     }
   }, [handleProjectRootChange]);
 

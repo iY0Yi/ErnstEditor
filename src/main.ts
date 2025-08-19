@@ -380,6 +380,20 @@ ipcMain.handle(IPC.FOLDER_REFRESH, async (event: any, folderPath: string): Promi
   }
 });
 
+// 軽量: 指定ディレクトリ直下の一覧（非再帰）
+ipcMain.handle(IPC.FS_LIST_DIR, async (_event: any, dirPath: string): Promise<{ name: string; path: string; type: 'file'|'directory' }[]> => {
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    return entries.map((d: any) => ({
+      name: d.name,
+      path: path.join(dirPath, d.name),
+      type: d.isDirectory() ? 'directory' : 'file'
+    }));
+  } catch (error) {
+    return [];
+  }
+});
+
 ipcMain.handle(IPC.FILE_READ, async (event: any, filePath: string): Promise<string | null> => {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');

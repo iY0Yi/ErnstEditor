@@ -11,6 +11,7 @@ export const IPC = {
   // Folder operations
   FOLDER_OPEN: 'folder:open',
   FOLDER_REFRESH: 'folder:refresh',
+  FS_LIST_DIR: 'fs:list-dir',
 
   // Window controls
   WINDOW_MINIMIZE: 'window:minimize',

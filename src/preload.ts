@@ -51,6 +51,9 @@ interface ElectronAPI {
   onAppAction: (callback: (action: { type: string; payload?: any }) => void) => void;
   removeAppActionListener: () => void;
 
+  // FS utils
+  listDir: (dirPath: string) => Promise<Array<{ name: string; path: string; type: 'file'|'directory' }>>;
+
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -114,5 +117,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAppActionListener: () => {
     ipcRenderer.removeAllListeners(IPC.APP_ACTION);
   },
+
+  // FS utils
+  listDir: (dirPath: string) => ipcRenderer.invoke(IPC.FS_LIST_DIR, dirPath),
 
 } as ElectronAPI);

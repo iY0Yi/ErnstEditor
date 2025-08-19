@@ -94,6 +94,20 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     const nudgeboxManager = new InlineNudgeboxManager(updateTab);
     nudgeboxManager.integrate(editor);
 
+    // #include パスでの "/" 入力時に補完を強制表示
+    try {
+      editor.onDidType((text: string) => {
+        if (text !== '/' && text !== '.') return;
+        const model = editor.getModel?.();
+        const pos = editor.getPosition?.();
+        if (!model || !pos) return;
+        const toCursor = model.getLineContent(pos.lineNumber).slice(0, pos.column - 1);
+        if (/#\s*include\s+["<][^"<>]*$/.test(toCursor)) {
+          editor.trigger('include-path', 'editor.action.triggerSuggest', {});
+        }
+      });
+    } catch {}
+
     // エディタAPI公開
     if (onEditorReady) {
       onEditorReady({
@@ -191,6 +205,9 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
         options={{
           automaticLayout: true, // 自動レイアウト（公式推奨）
           mouseWheelZoom: true, // Ctrl+スクロールでフォントサイズ変更を有効化
+          // 文字列内（"...") でも補完を出す
+          quickSuggestions: { other: true, comments: false, strings: true },
+          suggestOnTriggerCharacters: true,
           minimap: {
             enabled: true,
             side: 'right',

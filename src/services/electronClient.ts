@@ -47,6 +47,10 @@ export const electronClient = {
   // app actions
   onAppAction: (cb: (action: { type: string; payload?: any }) => void) => getAPI()?.onAppAction(cb),
   removeAppActionListener: () => getAPI()?.removeAppActionListener()
+  ,
+
+  // fs utils
+  listDir: async (dirPath: string) => getAPI()?.listDir(dirPath) ?? []
 };
 
 

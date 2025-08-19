@@ -165,4 +165,95 @@ export function setupGLSLLanguage(monacoInstance?: any): void {
 
   // 言語設定
   monacoToUse.languages.setLanguageConfiguration('glsl', glslLanguageConfiguration);
+
+  // #include パス補完（簡易版）
+  monacoToUse.languages.registerCompletionItemProvider('glsl', {
+    triggerCharacters: [
+      '/', '.', '"', '-', '_',
+      'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
+      'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+      '0','1','2','3','4','5','6','7','8','9'
+    ],
+    provideCompletionItems: async (model, position) => {
+      try {
+        const fullLine = model.getLineContent(position.lineNumber);
+        const lineToCursor = fullLine.slice(0, position.column - 1);
+        // 直前の #include を検出し、カーソルが "..." の中にあるかを確認
+        const includeIdx = lineToCursor.lastIndexOf('#include');
+        if (includeIdx === -1) return { suggestions: [] };
+        const q1 = lineToCursor.indexOf('"', includeIdx);
+        if (q1 === -1) return { suggestions: [] };
+        // 2個目のクォートは行全体から探し、カーソル位置と比較
+        const q2Full = fullLine.indexOf('"', q1 + 1);
+        const cursorCol = position.column - 1;
+        if (q2Full !== -1 && cursorCol > q2Full) return { suggestions: [] };
+        // prefix は q1 以降〜カーソルまで
+        const prefix = fullLine.substring(q1 + 1, cursorCol);
+        const { electronClient } = require('../../services/electronClient');
+
+        // 現在タブのファイルパスを推定
+        const tabs = (window as any).__ERNST_BUFFER_TABS__ as any[] | undefined;
+        const activeId = (window as any).__ERNST_BUFFER_ACTIVE_ID__ as string | undefined;
+        const active = Array.isArray(tabs) ? tabs.find(t => t.id === activeId) : null;
+        const currentPath: string | null = active?.filePath || null;
+        const trackRoot: string | null = (window as any).__ERNST_PROJECT_ROOT__ || null;
+        if (!electronClient) return { suggestions: [] };
+
+        // 基準ディレクトリの決定（ブラウザ側でパス演算）
+        const normalize = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+/g, '/');
+        const dirname = (p: string) => {
+          const n = normalize(p).replace(/\/$/, '');
+          const idx = n.lastIndexOf('/');
+          return idx > 0 ? n.slice(0, idx) : n;
+        };
+        const resolveRel = (base: string, rel: string) => {
+          const stack = normalize(base).split('/');
+          const parts = normalize(rel).split('/');
+          for (const part of parts) {
+            if (!part || part === '.') continue;
+            if (part === '..') { if (stack.length > 1) stack.pop(); }
+            else stack.push(part);
+          }
+          return stack.join('/');
+        };
+
+        const baseDir = currentPath ? dirname(currentPath) : (trackRoot || '');
+        const dirPart = prefix.endsWith('/') ? prefix : (prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/') + 1) : '');
+        const dirToList = dirPart ? resolveRel(baseDir, dirPart) : baseDir;
+
+        const entries = await electronClient.listDir(dirToList).catch(() => []);
+        // デバッグフック（必要時に有効化）
+        try {
+          if ((window as any).__ERNST_DEBUG_INCLUDE__) {
+            // eslint-disable-next-line no-console
+            console.log('[include-completion]', { baseDir, prefix, dirToList, count: entries?.length });
+          }
+        } catch {}
+        const useSlash = (p: string) => p.replace(/\\/g, '/');
+        const MonacoKind = monacoToUse.languages.CompletionItemKind;
+
+        const suggestions = entries
+          .filter((e: any) => e.type === 'directory' || /\.(glsl|glslinc|vert|frag|vs|fs|geom|comp|tesc|tese|vertex|fragment|shader)$/i.test(e.name))
+          .map((e: any) => {
+            const isDir = e.type === 'directory';
+            // 直近セグメントのみ置換。ディレクトリも末尾スラッシュは付けない
+            const insert = e.name;
+            const typedSegLen = prefix.length - (dirPart ? dirPart.length : 0);
+            const startColumn = position.column - typedSegLen;
+            const range = new monacoToUse.Range(position.lineNumber, Math.max(1, startColumn), position.lineNumber, position.column);
+            return {
+              label: e.name,
+              kind: isDir ? MonacoKind.Folder : MonacoKind.File,
+              filterText: e.name,
+              insertText: insert,
+              range
+            } as any;
+          });
+
+        return { suggestions };
+      } catch {
+        return { suggestions: [] };
+      }
+    }
+  });
 }
