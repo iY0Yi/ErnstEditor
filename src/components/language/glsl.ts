@@ -256,4 +256,43 @@ export function setupGLSLLanguage(monacoInstance?: any): void {
       }
     }
   });
+
+  // プレースホルダー補完: '$' で発火（uber_scripts/<ctx> 配下のファイルでのみ）
+  monacoToUse.languages.registerCompletionItemProvider('glsl', {
+    triggerCharacters: ['$'],
+    provideCompletionItems: async (model, position) => {
+      try {
+        const filePath: string | undefined = (model as any).uri?.path || (model as any).uri?.fsPath || '';
+        const norm = (filePath || '').replace(/\\/g, '/');
+        const ctxMatch = /\/uber_scripts\/(argument|inline|pmod|sdf2d|sdf3d|ik)\//.exec(norm);
+        if (!ctxMatch) return { suggestions: [] };
+        const ctx = ctxMatch[1] as 'argument'|'inline'|'pmod'|'sdf2d'|'sdf3d'|'ik';
+
+        // '$' の直後のみ
+        const line = model.getLineContent(position.lineNumber);
+        const upto = line.slice(0, position.column - 1);
+        if (!/\$[a-zA-Z0-9_]*$/.test(upto)) return { suggestions: [] };
+        const afterDollar = upto.replace(/^.*\$/,'');
+
+        // レジストリを外部JSONからロード
+        const registry = require('../../config/schemas/uber_placeholders.json') as Record<string, Array<{ name: string; type: string; desc: string }>>;
+
+        const items = registry[ctx] || [];
+        const MonacoKind = monacoToUse.languages.CompletionItemKind;
+        const pad = (i: number) => i.toString().padStart(3, '0');
+        const suggestions = items.map((it, idx) => ({
+          label: it.name,
+          kind: MonacoKind.Variable,
+          detail: it.type,
+          documentation: { value: it.desc },
+          insertText: it.name,
+          sortText: pad(idx),
+          range: new monacoToUse.Range(position.lineNumber, position.column - afterDollar.length - 1, position.lineNumber, position.column)
+        }));
+        return { suggestions };
+      } catch {
+        return { suggestions: [] };
+      }
+    }
+  });
 }
