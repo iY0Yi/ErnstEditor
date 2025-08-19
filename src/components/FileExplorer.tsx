@@ -312,8 +312,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
         if (result.success) {
           // タブ同期コールバックを呼び出し
           onFileDeleted?.(contextMenu.targetItem.path);
+          // もし開いているタブが削除対象だった場合、Editor は自動で次のタブに切替わる
           // ファイルツリーを更新（簡易的にリフレッシュ）
           await refreshFileTree();
+          try { window.dispatchEvent(new Event('ERNST_FOCUS_EDITOR')); } catch {}
         } else {
           alert(`Failed to delete: ${result.error}`);
         }
@@ -377,7 +379,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
     if (onRefreshFileTreeCallback) {
       onRefreshFileTreeCallback(refreshFileTree);
     }
-  }, [projectRoot, onRefreshFileTreeCallback]);
+  }, [onRefreshFileTreeCallback]);
 
   // コンテキストメニューを閉じる
   React.useEffect(() => {
@@ -385,6 +387,17 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
+
+  // グローバルイベント経由のリフレッシュ要求（バックアップ経路）
+  React.useEffect(() => {
+    const handler = () => {
+      if (projectRoot) {
+        refreshFileTree();
+      }
+    };
+    window.addEventListener('ERNST_REFRESH_FILE_TREE', handler as EventListener);
+    return () => window.removeEventListener('ERNST_REFRESH_FILE_TREE', handler as EventListener);
+  }, [projectRoot]);
 
   return (
     <>

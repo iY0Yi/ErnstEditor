@@ -46,6 +46,11 @@ interface ElectronAPI {
   saveSession: (sessionData: any, trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
   loadSession: (trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
   sessionExists: (trackPath: string) => Promise<boolean>;
+
+  // App actions (main → renderer)
+  onAppAction: (callback: (action: { type: string; payload?: any }) => void) => void;
+  removeAppActionListener: () => void;
+
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -100,5 +105,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // セッション保存・読み込み用API
   saveSession: (sessionData: any, trackPath: string) => ipcRenderer.invoke(IPC.SESSION_SAVE, sessionData, trackPath),
   loadSession: (trackPath: string) => ipcRenderer.invoke(IPC.SESSION_LOAD, trackPath),
-  sessionExists: (trackPath: string) => ipcRenderer.invoke(IPC.SESSION_EXISTS, trackPath)
+  sessionExists: (trackPath: string) => ipcRenderer.invoke(IPC.SESSION_EXISTS, trackPath),
+
+  // App actions (main → renderer)
+  onAppAction: (callback: (action: { type: string; payload?: any }) => void) => {
+    ipcRenderer.on(IPC.APP_ACTION, (_event, action) => callback(action));
+  },
+  removeAppActionListener: () => {
+    ipcRenderer.removeAllListeners(IPC.APP_ACTION);
+  },
+
 } as ElectronAPI);

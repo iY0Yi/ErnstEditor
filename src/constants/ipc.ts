@@ -38,7 +38,10 @@ export const IPC = {
   // Session
   SESSION_SAVE: 'session:save',
   SESSION_LOAD: 'session:load',
-  SESSION_EXISTS: 'session:exists'
+  SESSION_EXISTS: 'session:exists',
+
+  // App actions (from main → renderer)
+  APP_ACTION: 'app:action'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

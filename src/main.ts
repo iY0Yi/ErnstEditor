@@ -136,14 +136,85 @@ const createWindow = (): void => {
     mainWindow?.show();
   });
 
-  // F12キーで開発者ツール切り替え（EXE版でも有効）
+  // フォーカス時限定のキーハンドリング
   mainWindow.webContents.on('before-input-event', (event, input) => {
+    // DevTools
     if (input.key === 'F12') {
       if (mainWindow?.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools();
       } else {
         mainWindow?.webContents.openDevTools();
       }
+      event.preventDefault();
+      return;
+    }
+
+    const isAccel = process.platform === 'darwin' ? input.meta : input.control;
+    if (!isAccel) return;
+
+    // Quit
+    if (!input.shift && !input.alt && input.key?.toUpperCase() === 'Q') {
+      event.preventDefault();
+      app.quit();
+      return;
+    }
+
+    // Reload / Force Reload
+    if (!input.shift && !input.alt && input.key?.toUpperCase() === 'R') {
+      event.preventDefault();
+      mainWindow?.webContents.reload();
+      return;
+    }
+    if (input.shift && !input.alt && input.key?.toUpperCase() === 'R') {
+      event.preventDefault();
+      mainWindow?.webContents.reloadIgnoringCache();
+      return;
+    }
+
+    // To renderer actions (focused windowのみ)
+    const send = (type: string) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC.APP_ACTION, { type });
+      }
+    };
+
+    // New / Open / Save As / Close Tab / Toggle Sidebar
+    if (!input.shift && !input.alt && input.key?.toUpperCase() === 'N') {
+      event.preventDefault();
+      send('file:new');
+      return;
+    }
+    if (!input.shift && !input.alt && input.key?.toUpperCase() === 'O') {
+      event.preventDefault();
+      send('file:open');
+      return;
+    }
+    if (input.shift && !input.alt && input.key?.toUpperCase() === 'S') {
+      event.preventDefault();
+      send('file:save-as');
+      return;
+    }
+    if (!input.shift && !input.alt && input.key?.toUpperCase() === 'W') {
+      event.preventDefault();
+      send('tab:close');
+      return;
+    }
+    if (!input.shift && !input.alt && input.key?.toUpperCase() === 'B') {
+      event.preventDefault();
+      send('view:toggle-sidebar');
+      return;
+    }
+
+    // Tab navigation
+    if (!input.shift && !input.alt && input.key === 'Tab') {
+      event.preventDefault();
+      send('tab:next');
+      return;
+    }
+    if (input.shift && !input.alt && input.key === 'Tab') {
+      event.preventDefault();
+      send('tab:prev');
+      return;
     }
   });
 
@@ -237,11 +308,13 @@ ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: stri
 
       const textToWrite = typeof formatted === 'string' && formatted.length > 0 ? formatted : content;
       fs.writeFileSync(filePath, textToWrite, 'utf-8');
+      try { mainWindow?.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath } }); } catch {}
       return { success: true, formattedContent: formatted ?? undefined };
     }
 
     // 非GLSLはそのまま保存
     fs.writeFileSync(filePath, content, 'utf-8');
+    try { mainWindow?.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath } }); } catch {}
     return { success: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -265,6 +338,7 @@ ipcMain.handle(IPC.FILE_SAVE_AS, async (event: any, content: string): Promise<{ 
   if (!result.canceled && result.filePath) {
     try {
       fs.writeFileSync(result.filePath, content, 'utf-8');
+      try { mainWindow?.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath: result.filePath } }); } catch {}
       return {
         success: true,
         filePath: result.filePath,
@@ -277,6 +351,8 @@ ipcMain.handle(IPC.FILE_SAVE_AS, async (event: any, content: string): Promise<{ 
   }
   return { success: false };
 });
+
+// （不要になったFILE_SAVED受信は削除）
 
 // ファイルエクスプローラー用のIPC処理
 ipcMain.handle(IPC.FOLDER_OPEN, async (): Promise<{ files: any[]; rootPath: string } | null> => {
@@ -673,6 +749,8 @@ app.whenReady().then(async () => {
       createWindow();
     }
   });
+
+  // （グローバルショートカットは未使用）
 });
 
 let isQuitting = false; // 終了処理中フラグ

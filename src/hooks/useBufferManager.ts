@@ -82,11 +82,21 @@ export function useBufferManager({
    */
   const updateTab = React.useCallback((tabId: string, updates: Partial<FileTab>) => {
     _setTabs(prevTabs =>
-      prevTabs.map(tab =>
-        tab.id === tabId ? { ...tab, ...updates } : tab
-      )
+      prevTabs.map(tab => {
+        if (tab.id !== tabId) return tab;
+        const next = { ...tab, ...updates } as FileTab;
+        // モデルが欠落/破棄されている場合は再生成
+        try {
+          const disposed = next.model && typeof next.model.isDisposed === 'function' ? next.model.isDisposed() : false;
+          if ((!next.model || disposed) && (updates.content !== undefined || updates.language !== undefined)) {
+            const model = createModel(next.content, next.language, next.filePath || undefined);
+            return { ...next, model };
+          }
+        } catch {}
+        return next;
+      })
     );
-  }, []);
+  }, [createModel]);
 
   /**
    * アクティブタブの取得
@@ -158,6 +168,16 @@ export function useBufferManager({
       _setActiveTabId(targetTab.id);
 
       // Step 3: Monaco Editorの内容を切り替え
+      // disposed モデルなら再生成
+      try {
+        if (targetTab.model && typeof targetTab.model.isDisposed === 'function' && targetTab.model.isDisposed()) {
+          const recreated = createModel(targetTab.content, targetTab.language, targetTab.filePath || undefined);
+          targetTab = { ...targetTab, model: recreated } as FileTab;
+          // タブ配列にも反映
+          _setTabs(prev => prev.map(t => t.id === targetTab!.id ? (targetTab as FileTab) : t));
+        }
+      } catch {}
+
       if (targetTab.model) {
         editorInstance.setModel(targetTab.model);
 
@@ -299,26 +319,41 @@ export function useBufferManager({
     const tabIndex = _tabs.findIndex(tab => tab.id === tabId);
     if (tabIndex === -1) return;
 
-    // モデルを破棄
     const tab = _tabs[tabIndex];
-    if (tab.model) {
-      tab.model.dispose();
-    }
+    const isClosingActive = _activeTabId === tabId;
 
-    const newTabs = _tabs.filter(tab => tab.id !== tabId);
+    const newTabs = _tabs.filter(t => t.id !== tabId);
     _setTabs(newTabs);
 
-    // アクティブタブが削除された場合の処理
-    if (_activeTabId === tabId) {
+    // アクティブタブが削除された場合は、まず次のタブへ切替えてからモデルを破棄
+    if (isClosingActive) {
       if (newTabs.length > 0) {
-        // 隣接するタブをアクティブに（setActiveBufferを使用）
         const newActiveIndex = Math.min(tabIndex, newTabs.length - 1);
         const nextActiveTabId = newTabs[newActiveIndex].id;
-        setActiveBuffer(nextActiveTabId);
+        (async () => {
+          // 先にエディタのモデルを切替える
+          await setActiveBuffer(nextActiveTabId);
+          // 直後にフォーカスを確実に与える
+          try {
+            const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+            editor?.focus?.();
+          } catch {}
+          try { window.dispatchEvent(new Event('ERNST_FOCUS_EDITOR')); } catch {}
+          try { tab.model?.dispose?.(); } catch {}
+        })();
       } else {
         _setActiveTabId(null);
         document.title = 'Ernst Editor';
+        try { tab.model?.dispose?.(); } catch {}
+        // モデル無し状態でもエディタが古いモデルを掴んでいる場合があるので明示的にnull
+        try {
+          const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+          if (editor) editor.setModel(null);
+        } catch {}
       }
+    } else {
+      // 非アクティブタブは即破棄
+      try { tab.model?.dispose?.(); } catch {}
     }
   }, [_tabs, _activeTabId, setActiveBuffer]);
 
@@ -343,8 +378,7 @@ export function useBufferManager({
       }
 
       if (!editorInstance) {
-        console.error('📚BufferManager: Monaco Editor instance not found');
-        return false;
+        // ここで即 return せず、Save As にフォールバックできるよう継続
       }
 
       // 追加フォールバック: 現在のエディタモデルからタブを逆引き
@@ -363,12 +397,16 @@ export function useBufferManager({
         } catch {}
       }
 
-      if (!activeTab || !activeTab.filePath) {
+      if (!activeTab) {
         console.log('📚BufferManager: No active file to save');
         return false;
       }
+      if (!activeTab.filePath) {
+        // 未保存ファイルは Save As にフォールバックさせる
+        return false;
+      }
 
-      const content = editorInstance.getValue();
+      const content = editorInstance?.getValue?.() ?? activeTab.model?.getValue?.() ?? activeTab.content ?? '';
 
       // ファイルに保存（GLSLはメイン側でclang-formatが走る）
       if (electronClient) {
@@ -464,35 +502,69 @@ export function useBufferManager({
   }, []);
 
   // 新規ファイル作成
-  const createNewFile = React.useCallback(() => {
-    const newTab: FileTab = {
+  const createNewFile = React.useCallback(async () => {
+    let newTab: FileTab = {
       id: generateId(),
       filePath: '',
       fileName: 'untitled.glsl',
       content: '',
       language: 'glsl',
-      isModified: false
+      isModified: true
     };
-    addTab(newTab);
-  }, [addTab]);
+    // Monaco モデルを事前に作成
+    if (monaco && !newTab.model) {
+      const model = createModel(newTab.content, newTab.language);
+      newTab = { ...newTab, model };
+    }
+    await addTabAndActivate(newTab);
+  }, [addTabAndActivate, monaco, createModel]);
 
     // Save As機能（統合）
   const saveActiveTabAs = React.useCallback(async (): Promise<boolean> => {
-    const activeTab = getActiveTab();
+    let activeTab = getActiveTab();
+    if (!activeTab) {
+      // フォールバック: 現在のエディタモデルから推測
+      try {
+        const editorInstance = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+        const currentModel = editorInstance?.getModel?.();
+        if (currentModel) {
+          const found = _tabsRef.current.find(t => t.model === currentModel) || null;
+          if (found) {
+            activeTab = found;
+            if (_activeTabId !== found.id) {
+              _setActiveTabId(found.id);
+            }
+          }
+        }
+      } catch {}
+    }
+    if (!activeTab) {
+      // さらにフォールバック: タブが一つだけならそれを対象にする
+      if (_tabsRef.current.length === 1) {
+        activeTab = _tabsRef.current[0];
+        if (_activeTabId !== activeTab.id) {
+          _setActiveTabId(activeTab.id);
+        }
+      }
+    }
     if (!activeTab) {
       console.log('📚BufferManager: No active tab to save');
       return false;
     }
 
     try {
-      // Monaco Editorから現在の内容を取得
-      const editorInstance = (window as any).monaco?.editor?.getEditors?.()?.[0];
-      if (!editorInstance) {
-        console.error('📚BufferManager: Monaco Editor instance not found');
-        return false;
+      // 現在の内容を取得（エディタ未準備時のフォールバック付き）
+      let content: string | undefined;
+      try {
+        const editorInstance = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+        content = editorInstance?.getValue?.();
+      } catch {}
+      if (typeof content !== 'string') {
+        try { content = activeTab.model?.getValue?.(); } catch {}
       }
-
-      const content = editorInstance.getValue();
+      if (typeof content !== 'string') {
+        content = activeTab.content ?? '';
+      }
 
       // Save Asダイアログ
       if (electronClient) {

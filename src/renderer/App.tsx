@@ -43,6 +43,7 @@ const App: React.FC = () => {
   const resizingRef = React.useRef<boolean>(false);
   const startXRef = React.useRef<number>(0);
   const startWidthRef = React.useRef<number>(sidebarWidth);
+  const [isSidebarVisible, setIsSidebarVisible] = React.useState<boolean>(true);
 
   const handleResizerMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -74,10 +75,11 @@ const App: React.FC = () => {
     try {
       (window as any).__ERNST_UI_STATE__ = {
         ...(window as any).__ERNST_UI_STATE__,
-        sidebarWidth
+        sidebarWidth,
+        isSidebarVisible
       };
     } catch {}
-  }, [sidebarWidth]);
+  }, [sidebarWidth, isSidebarVisible]);
 
   // セッション復元時のサイドバー幅適用
   React.useEffect(() => {
@@ -91,6 +93,8 @@ const App: React.FC = () => {
     window.addEventListener('ERNST_APPLY_SIDEBAR_WIDTH', handler as EventListener);
     return () => window.removeEventListener('ERNST_APPLY_SIDEBAR_WIDTH', handler as EventListener);
   }, []);
+
+  // メインからのアクション受信（依存変数が定義された後に配置）
 
   // Monaco Editor関連のPromise例外を処理
   React.useEffect(() => {
@@ -187,6 +191,8 @@ const App: React.FC = () => {
   } = bufferManager;
 
   const activeTab = getActiveTab();
+
+  // （後方へ移動）
 
   // デバッグ/外部操作用に一部関数を公開
   React.useEffect(() => {
@@ -385,14 +391,78 @@ const App: React.FC = () => {
   const handleSaveFile = React.useCallback(async () => {
     const success = await saveActiveTab();
     if (!success) {
-      console.log('⚠️ Save failed, fallback to Save As');
-      await saveActiveTabAs();
+      const savedAs = await saveActiveTabAs();
+      if (savedAs) {
+        try { refreshFileTreeCallback?.(); } catch {}
+      }
+      return;
     }
-  }, [saveActiveTab, saveActiveTabAs]);
+    try { refreshFileTreeCallback?.(); } catch {}
+  }, [saveActiveTab, saveActiveTabAs, refreshFileTreeCallback]);
 
   const handleNewFile = React.useCallback(() => {
     createNewFile();
   }, [createNewFile]);
+
+  // メインからのアクション受信（全依存が定義済みの最後に配置）
+  React.useEffect(() => {
+    const { electronClient } = require('../services/electronClient');
+    const unsubscribe = electronClient.onAppAction?.(async (action: { type: string; payload?: any }) => {
+      switch (action?.type) {
+        case 'file:new':
+          handleNewFile();
+          break;
+        case 'file:open':
+          await handleOpenFile();
+          break;
+        case 'file:save-as':
+          await saveActiveTabAs();
+          break;
+        case 'tab:close': {
+          const current = getActiveTab();
+          if (current) {
+            closeTab(current.id);
+          }
+          break;
+        }
+        case 'tab:next': {
+          if (tabs.length > 0 && activeTabId) {
+            const idx = tabs.findIndex(t => t.id === activeTabId);
+            const next = tabs[(idx + 1) % tabs.length];
+            setActiveBuffer(next.id);
+          }
+          break;
+        }
+        case 'tab:prev': {
+          if (tabs.length > 0 && activeTabId) {
+            const idx = tabs.findIndex(t => t.id === activeTabId);
+            const prev = tabs[(idx - 1 + tabs.length) % tabs.length];
+            setActiveBuffer(prev.id);
+          }
+          break;
+        }
+        case 'view:toggle-sidebar': {
+          setIsSidebarVisible(v => {
+            const next = !v;
+            try { (window as any).monacoEditorInstance?.layout?.(); } catch {}
+            return next;
+          });
+          break;
+        }
+        case 'explorer:refresh': {
+          try { refreshFileTreeCallback?.(); } catch {}
+          try { window.dispatchEvent(new Event('ERNST_REFRESH_FILE_TREE')); } catch {}
+          break;
+        }
+        default:
+          break;
+      }
+    });
+    return () => {
+      try { electronClient.removeAppActionListener?.(); } catch {}
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [tabs, activeTabId, setActiveBuffer, getActiveTab, closeTab, handleNewFile, handleOpenFile, saveActiveTabAs]);
 
   // テーマローディング中の表示（シンプルに背景色のみ）
   if (themeLoading) {
@@ -416,7 +486,7 @@ const App: React.FC = () => {
       {/* メインコンテンツ（サイドバー + エディタ） */}
       <div className="app-main-content">
         {/* サイドバー（初回は非表示） */}
-        {trackDirectoryPath ? (
+        {trackDirectoryPath && isSidebarVisible ? (
           <div className="app-sidebar" style={{ width: `${sidebarWidth}px` }}>
             <SidebarPanel
               onFileSelect={handleFileSelect}
@@ -431,7 +501,7 @@ const App: React.FC = () => {
           </div>
         ) : null}
         {/* 垂直リサイザ */}
-        {trackDirectoryPath ? (
+        {trackDirectoryPath && isSidebarVisible ? (
           <div className="app-resizer" onMouseDown={handleResizerMouseDown} title="Drag to resize sidebar" />
         ) : null}
 

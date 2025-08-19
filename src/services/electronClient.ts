@@ -42,7 +42,11 @@ export const electronClient = {
   // misc
   notifyRendererReady: async () => getAPI()?.notifyRendererReady(),
   onFileOpenFromCLI: (cb: (data: { filePath: string; content: string; fileName: string; trackPath?: string | null; projectName?: string | null }) => void) => getAPI()?.onFileOpenFromCLI(cb),
-  removeFileOpenFromCLIListener: () => getAPI()?.removeFileOpenFromCLIListener()
+  removeFileOpenFromCLIListener: () => getAPI()?.removeFileOpenFromCLIListener(),
+
+  // app actions
+  onAppAction: (cb: (action: { type: string; payload?: any }) => void) => getAPI()?.onAppAction(cb),
+  removeAppActionListener: () => getAPI()?.removeAppActionListener()
 };
 
 

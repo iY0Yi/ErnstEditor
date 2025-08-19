@@ -57,6 +57,13 @@ export interface ElectronAPI {
   saveSession: (sessionData: any, trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
   loadSession: (trackPath: string) => Promise<{ success: boolean; error?: string; data?: any }>;
   sessionExists: (trackPath: string) => Promise<boolean>;
+
+  // App actions (main → renderer)
+  onAppAction: (callback: (action: { type: string; payload?: any }) => void) => void;
+  removeAppActionListener: () => void;
+
+  // Save notification (renderer → main)
+  notifyFileSaved: (filePath: string) => void;
 }
 
 // グローバル型定義

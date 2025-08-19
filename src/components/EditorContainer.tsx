@@ -76,27 +76,15 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
       applyFontSize(lastSession?.editorFontSize);
     } catch {}
 
-    // 保存ショートカット（Context 経由）
+    // 保存ショートカット（既存: Context 経由）。未保存ファイルは Save As へフォールバック
     editor.addAction({
       id: 'save-file-app-context',
       label: 'Save File (Context)',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
       run: () => {
         try {
-          const ctx = (editor as any)._appContext as React.ContextType<typeof AppContext> | null;
-          if (ctx?.saveActiveTab) {
-            ctx.saveActiveTab();
-            return;
-          }
-          // フォールバック: BufferManager を直接呼ぶ
-          const setActive = (window as any)?.__ERNST_SET_ACTIVE_BUFFER__;
-          const tabs = (window as any)?.__ERNST_BUFFER_TABS__;
-          const activeId = (window as any)?.__ERNST_BUFFER_ACTIVE_ID__;
-          if (!activeId && Array.isArray(tabs) && tabs[0]?.id && setActive) {
-            setActive(tabs[0].id);
-          }
-          const bmSave = (window as any)?.__ERNST_APP_CONTEXT__?.saveActiveTab;
-          bmSave?.();
+          // App側の onSaveFile を呼ぶ。未保存は Save As へフォールバック
+          onSaveFile();
         } catch {}
       }
     });
@@ -131,7 +119,7 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
       }
     } catch {}
 
-  }, [onEditorReady, updateTab]);
+  }, [onEditorReady, updateTab, onSaveFile]);
 
   const dispose = React.useCallback(() => {
     // 追加のクリーンアップは現状不要
@@ -154,6 +142,18 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     };
     window.addEventListener('ERNST_APPLY_FONT_SIZE', handler as EventListener);
     return () => window.removeEventListener('ERNST_APPLY_FONT_SIZE', handler as EventListener);
+  }, []);
+
+  // 外部からのフォーカス要求
+  React.useEffect(() => {
+    const focusHandler = () => {
+      try {
+        const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+        editor?.focus?.();
+      } catch {}
+    };
+    window.addEventListener('ERNST_FOCUS_EDITOR', focusHandler as EventListener);
+    return () => window.removeEventListener('ERNST_FOCUS_EDITOR', focusHandler as EventListener);
   }, []);
 
   // BufferManager.setActiveBufferが既にモデル切り替えを行っているため、
