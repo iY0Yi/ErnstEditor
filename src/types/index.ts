@@ -15,7 +15,7 @@ export interface SearchResult {
 export interface ElectronAPI {
   // 既存のファイル操作API
   openFile: () => Promise<{ filePath: string; content: string; fileName: string } | null>;
-  saveFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string; formattedContent?: string }>;
+  saveFile: (filePath: string, content: string, options?: { format?: boolean; mustExist?: boolean }) => Promise<{ success: boolean; error?: string; formattedContent?: string }>;
   saveFileAs: (content: string) => Promise<{ success: boolean; filePath?: string; fileName?: string; error?: string }>;
 
   // ファイルエクスプローラー用API
@@ -24,7 +24,7 @@ export interface ElectronAPI {
   readFile: (filePath: string) => Promise<string | null>;
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
   deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-  moveFile: (sourcePath: string, targetDir: string) => Promise<{ success: boolean; error?: string }>;
+  moveFile: (sourcePath: string, targetDir: string) => Promise<{ success: boolean; newPath?: string; error?: string }>;
 
   // ウィンドウコントロール用API
   minimizeWindow: () => Promise<void>;

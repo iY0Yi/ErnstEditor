@@ -57,14 +57,6 @@ export class BlenderService {
    * @param value - 送信する浮動小数点値
    */
   sendUniformValue(value: number): void {
-    const status = this.getConnectionStatus();
-    console.log('🔍 sendUniformValue Debug:', {
-      isConnected: this.isConnected(),
-      isServerRunning: status.isServerRunning,
-      isBlenderConnected: status.isBlenderConnected,
-      clientCount: status.clientCount
-    });
-
     if (!this.isConnected()) {
       console.warn('⚠️ Cannot send uniform value: No Blender clients connected');
       return;

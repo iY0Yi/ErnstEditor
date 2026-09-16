@@ -7,7 +7,6 @@ export const useProjectManager = () => {
   const [projectName, setProjectName] = useState<string>('');
   // 直接指定されたプロジェクト名（CLI など）を保持
   const directNameRef = useRef<string>('');
-  const [refreshFileTreeCallback, setRefreshFileTreeCallback] = useState<(() => void) | null>(null);
 
   // プロジェクトルート変更ハンドラー
   const handleProjectRootChange = useCallback((root: string | null) => {
@@ -46,8 +45,6 @@ export const useProjectManager = () => {
 
   return {
     projectName,
-    refreshFileTreeCallback,
-    setRefreshFileTreeCallback,
     handleProjectRootChange,
     setProjectNameDirect,
     handleFileRenamed,

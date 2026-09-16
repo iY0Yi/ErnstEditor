@@ -218,14 +218,26 @@ const createWindow = (): void => {
     }
   });
 
-  // ウィンドウクローズ時の強制終了
-  mainWindow.on('closed', () => {
-    if (!isQuitting) {
-      // アプリ全体を強制終了
-      setTimeout(() => {
-        process.exit(0);
-      }, 100);
+  // renderer が未保存変更で unload を止めたときに確認ダイアログを出す
+  mainWindow.webContents.on('will-prevent-unload', (event) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      buttons: ['Discard Changes', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      message: 'You have unsaved changes.',
+      detail: 'Your changes will be lost if you close without saving.'
+    });
+    if (choice === 0) {
+      event.preventDefault();
     }
+  });
+
+  // ウィンドウが閉じたらアプリも終了する（macOS を含む全プラットフォーム共通）
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    app.quit();
   });
 };
 
@@ -256,13 +268,17 @@ ipcMain.handle(IPC.FILE_OPEN, async (): Promise<{ filePath: string; content: str
   return null;
 });
 
-ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: string): Promise<{ success: boolean; error?: string; formattedContent?: string }> => {
+ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: string, options?: { format?: boolean; mustExist?: boolean }): Promise<{ success: boolean; error?: string; formattedContent?: string }> => {
   try {
+    if (options?.mustExist && !fs.existsSync(filePath)) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
     const ext = path.extname(filePath).toLowerCase();
     const isGLSL = ['.glsl', '.glslinc', '.vert', '.frag', '.geom', '.comp', '.tesc', '.tese', '.vs', '.fs', '.vertex', '.fragment', '.shader'].includes(ext);
+    const shouldFormat = options?.format !== false;
 
     // フォーマット適用（GLSL系のみ）
-    if (isGLSL) {
+    if (isGLSL && shouldFormat) {
       const formatted = await new Promise<string | null>((resolve) => {
         const args = ['-style=file', `--assume-filename=${filePath}`];
         const attemptExec = (binPath: string, next: () => void) => {
@@ -312,7 +328,7 @@ ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: stri
       return { success: true, formattedContent: formatted ?? undefined };
     }
 
-    // 非GLSLはそのまま保存
+    // 非GLSL・整形なし指定はそのまま保存
     fs.writeFileSync(filePath, content, 'utf-8');
     try { mainWindow?.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath } }); } catch {}
     return { success: true };
@@ -406,6 +422,11 @@ ipcMain.handle(IPC.FILE_READ, async (event: any, filePath: string): Promise<stri
 
 ipcMain.handle(IPC.FILE_RENAME, async (event: any, oldPath: string, newPath: string): Promise<{ success: boolean; error?: string }> => {
   try {
+    // renameSync は Windows で既存ファイルを上書きするため事前に弾く。
+    // 大文字小文字だけの変更は同一ファイルを指すので realpath で判定して許可する
+    if (fs.existsSync(newPath) && fs.realpathSync.native(newPath) !== fs.realpathSync.native(oldPath)) {
+      return { success: false, error: `File already exists: ${path.basename(newPath)}` };
+    }
     fs.renameSync(oldPath, newPath);
     return { success: true };
   } catch (error) {
@@ -430,10 +451,15 @@ ipcMain.handle(IPC.FILE_DELETE, async (event: any, filePath: string): Promise<{ 
 });
 
 // ファイル移動
-ipcMain.handle(IPC.FILE_MOVE, async (event: any, sourcePath: string, targetDir: string): Promise<{ success: boolean; error?: string }> => {
+ipcMain.handle(IPC.FILE_MOVE, async (event: any, sourcePath: string, targetDir: string): Promise<{ success: boolean; newPath?: string; error?: string }> => {
   try {
     const fileName = path.basename(sourcePath);
     const newPath = path.join(targetDir, fileName);
+
+    const relative = path.relative(sourcePath, targetDir);
+    if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+      return { success: false, error: `Cannot move a folder into itself: ${fileName}` };
+    }
 
     // 同名ファイルが存在するかチェック
     if (fs.existsSync(newPath)) {
@@ -442,7 +468,7 @@ ipcMain.handle(IPC.FILE_MOVE, async (event: any, sourcePath: string, targetDir: 
 
     // ファイル/ディレクトリを移動
     fs.renameSync(sourcePath, newPath);
-    return { success: true };
+    return { success: true, newPath };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { success: false, error: errorMessage };
@@ -605,10 +631,6 @@ ipcMain.handle(IPC.BLENDER_SEND_TEST_VALUE, async (event: any, value: number): P
 }> => {
   try {
 
-    // 詳細な状態ログを出力
-    const status = blenderService.getConnectionStatus();
-
-    // 直接送信を試行
     blenderService.sendUniformValue(value);
 
     return { success: true };
@@ -769,45 +791,50 @@ app.whenReady().then(async () => {
 
 let isQuitting = false; // 終了処理中フラグ
 
-// アプリケーション終了前のクリーンアップ
-app.on('before-quit', async (event) => {
-  if (!isQuitting) {
-    isQuitting = true;
-    event.preventDefault(); // 一旦終了を止める
+// 終了要求はすべてここで受け、最終的な終了は app.exit で行う（app.exit は before-quit を発火しない）
+app.on('before-quit', (event) => {
+  event.preventDefault();
+  if (isQuitting) return;
 
-    // Blender WebSocket サービスを停止
-    try {
-      await blenderService.stop();
-      console.log('Ernst Editor WebSocket Server stopped');
-      } catch (error) {
-      console.error('Failed to stop WebSocket Server:', error);
-    }
-
-    // mainWindowを明示的にクローズ
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.destroy();
-      mainWindow = null;
-    }
-
-    // 段階的終了処理
-    setTimeout(() => {
-      app.exit(0);
-    }, 100);
-
-    setTimeout(() => {
-      process.exit(0);
-    }, 300);
-
-    setTimeout(() => {
-      // 最終手段：すべての子プロセスを強制終了
-      if (process.platform === 'win32') {
-        require('child_process').exec('taskkill /F /T /PID ' + process.pid);
-      } else {
-        process.kill(process.pid, 'SIGKILL');
-      }
-    }, 500);
+  // ウィンドウが残っていれば close 経由で閉じる。未保存確認（beforeunload）で
+  // キャンセルされればそのまま残り、閉じれば 'closed' から再度 app.quit() が呼ばれる
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+    return;
   }
+
+  shutdown();
 });
+
+async function shutdown(): Promise<void> {
+  isQuitting = true;
+
+  // Blender WebSocket サービスを停止
+  try {
+    await blenderService.stop();
+    console.log('Ernst Editor WebSocket Server stopped');
+  } catch (error) {
+    console.error('Failed to stop WebSocket Server:', error);
+  }
+
+  // 段階的終了処理
+  setTimeout(() => {
+    app.exit(0);
+  }, 100);
+
+  setTimeout(() => {
+    process.exit(0);
+  }, 300);
+
+  setTimeout(() => {
+    // 最終手段：すべての子プロセスを強制終了
+    if (process.platform === 'win32') {
+      require('child_process').exec('taskkill /F /T /PID ' + process.pid);
+    } else {
+      process.kill(process.pid, 'SIGKILL');
+    }
+  }, 500);
+}
 
 // セッション保存・読み込み用IPC
 import { saveSession, loadSession, sessionExists } from './services/sessionService';
@@ -886,11 +913,5 @@ ipcMain.handle(IPC.SESSION_EXISTS, async (event: any, trackPath: string) => {
   }
 });
 
-app.on('window-all-closed', () => {
-  // macOS以外では即座に終了
-  if (process.platform !== 'darwin') {
-    if (!isQuitting) {
-      app.quit();
-    }
-  }
-});
+// 終了は 'closed' ハンドラで行うため、macOS の既定動作（アプリを残す）も含めてここでは何もしない
+app.on('window-all-closed', () => {});

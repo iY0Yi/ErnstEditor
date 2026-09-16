@@ -23,19 +23,33 @@ interface FileExplorerProps {
   onFileSelect: (filePath: string, fileName: string, content: string) => void;
   activeFilePath: string | null;
   onProjectRootChange?: (projectRoot: string | null) => void;
-  onRefreshFileTreeCallback?: (callback: () => void) => void;
   onFileRenamed?: (oldPath: string, newPath: string) => void;
   onFileDeleted?: (filePath: string) => void;
   externalProjectRoot?: string | null; // 外部からプロジェクトルートを設定
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePath, onProjectRootChange, onRefreshFileTreeCallback, onFileRenamed, onFileDeleted, externalProjectRoot }) => {
+const isSameOrInside = (target: string, basePath: string): boolean =>
+  target === basePath || target.startsWith(basePath + '\\') || target.startsWith(basePath + '/');
+
+const getParentPath = (itemPath: string): string => {
+  const idx = Math.max(itemPath.lastIndexOf('/'), itemPath.lastIndexOf('\\'));
+  return idx === -1 ? '' : itemPath.slice(0, idx);
+};
+
+const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePath, onProjectRootChange, onFileRenamed, onFileDeleted, externalProjectRoot }) => {
   const [files, setFiles] = React.useState<FileItem[]>([]);
   const [contextMenu, setContextMenu] = React.useState<ContextMenuPosition | null>(null);
   const [draggedItem, setDraggedItem] = React.useState<FileItem | null>(null);
   const [projectRoot, setProjectRoot] = React.useState<string | null>(null);
   const [renamingItem, setRenamingItem] = React.useState<string | null>(null);
   const [renameValue, setRenameValue] = React.useState<string>('');
+
+  // 非同期のリフレッシュやイベントハンドラから最新値を参照するための ref
+  const filesRef = React.useRef<FileItem[]>(files);
+  const projectRootRef = React.useRef<string | null>(projectRoot);
+  const refreshSeqRef = React.useRef(0);
+  React.useEffect(() => { filesRef.current = files; }, [files]);
+  React.useEffect(() => { projectRootRef.current = projectRoot; }, [projectRoot]);
 
   // プロジェクトルートを開く
   const openProjectFolder = async () => {
@@ -143,19 +157,29 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
           return;
         }
 
+        // 同じフォルダ内へのドロップは移動不要（「既に存在する」エラーになるため）
+        if (getParentPath(draggedItem.path) === targetDirectoryPath) {
+          setDraggedItem(null);
+          return;
+        }
+
         // ファイル/ディレクトリを目標ディレクトリに移動
         const { electronClient } = require('../services/electronClient');
         if (electronClient && electronClient.moveFile) {
           const result = await electronClient.moveFile(draggedItem.path, targetDirectoryPath);
-          if (result.success) {
-            // ファイルツリーを更新
-            await refreshFileTree();
+          if (result.success && result.newPath) {
+            onFileRenamed?.(draggedItem.path, result.newPath);
+            await refreshFileTree({ from: draggedItem.path, to: result.newPath });
           } else {
             alert(`Failed to move: ${result.error}`);
           }
         }
       }
       setDraggedItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
   };
 
   return (
@@ -168,6 +192,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
           style={{
             paddingLeft: `${depth * 16 + 8}px`,
           }}
@@ -261,7 +286,13 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
       return;
     }
 
-    if (renameValue.trim() === targetItem.name) {
+    const newName = renameValue.trim();
+    if (newName === targetItem.name) {
+      handleRenameCancel();
+      return;
+    }
+    if (/[\\/]/.test(newName) || newName === '.' || newName === '..') {
+      alert(`Invalid name: ${newName}`);
       handleRenameCancel();
       return;
     }
@@ -270,15 +301,15 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
       // 簡単なパス計算（クロスプラットフォーム対応）
       const pathSeparator = targetItem.path.includes('/') ? '/' : '\\';
       const pathParts = targetItem.path.split(pathSeparator);
-      pathParts[pathParts.length - 1] = renameValue.trim(); // 最後の部分（ファイル名）を置き換え
+      pathParts[pathParts.length - 1] = newName; // 最後の部分（ファイル名）を置き換え
       const newPath = pathParts.join(pathSeparator);
 
       const result = await electronClient.renameFile(targetItem.path, newPath);
       if (result.success) {
         // タブ同期コールバックを呼び出し
         onFileRenamed?.(targetItem.path, newPath);
-        // ファイルツリーを更新
-        await refreshFileTree();
+        // ファイルツリーを更新（リネームしたフォルダの展開状態も引き継ぐ）
+        await refreshFileTree({ from: targetItem.path, to: newPath });
         handleRenameCancel();
       } else {
         alert(`Failed to rename: ${result.error}`);
@@ -312,10 +343,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
         if (result.success) {
           // タブ同期コールバックを呼び出し
           onFileDeleted?.(contextMenu.targetItem.path);
-          // もし開いているタブが削除対象だった場合、Editor は自動で次のタブに切替わる
-          // ファイルツリーを更新（簡易的にリフレッシュ）
           await refreshFileTree();
-          try { window.dispatchEvent(new Event('ERNST_FOCUS_EDITOR')); } catch {}
+          window.dispatchEvent(new Event('ERNST_FOCUS_EDITOR'));
         } else {
           alert(`Failed to delete: ${result.error}`);
         }
@@ -359,27 +388,29 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
   };
 
   // ファイルツリーを再読み込み（展開状態を保持）
-  const refreshFileTree = async () => {
+  // イベント経由でも呼ばれるため、クロージャではなく ref から最新の状態を読む
+  const refreshFileTree = React.useCallback(async (renamed?: { from: string; to: string }) => {
+    const root = projectRootRef.current;
     const { electronClient } = require('../services/electronClient');
-    if (projectRoot && electronClient) {
-      // 現在の展開状態を保存
-      const expandedPaths = collectExpandedPaths(files);
+    if (!root || !electronClient) return;
 
-      const result = await electronClient.refreshFolder(projectRoot);
-      if (result) {
-        // 新しいファイルツリーに展開状態を適用
-        const filesWithExpandedState = applyExpandedState(result.files, expandedPaths);
-        setFiles(filesWithExpandedState);
-      }
-    }
-  };
+    const seq = ++refreshSeqRef.current;
+    const result = await electronClient.refreshFolder(root);
+    // 後発のリフレッシュが先に完了していたら古い結果で上書きしない
+    if (!result || seq !== refreshSeqRef.current || root !== projectRootRef.current) return;
 
-  // refreshFileTree関数を親コンポーネントに登録
-  React.useEffect(() => {
-    if (onRefreshFileTreeCallback) {
-      onRefreshFileTreeCallback(refreshFileTree);
+    // 取得完了時点の展開状態を使う（取得中にユーザーが開閉した分も反映する）
+    const expandedPaths = collectExpandedPaths(filesRef.current);
+    if (renamed) {
+      Array.from(expandedPaths).forEach(p => {
+        if (isSameOrInside(p, renamed.from)) {
+          expandedPaths.delete(p);
+          expandedPaths.add(renamed.to + p.slice(renamed.from.length));
+        }
+      });
     }
-  }, [onRefreshFileTreeCallback]);
+    setFiles(applyExpandedState(result.files, expandedPaths));
+  }, []);
 
   // コンテキストメニューを閉じる
   React.useEffect(() => {
@@ -388,16 +419,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, activeFilePat
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // グローバルイベント経由のリフレッシュ要求（バックアップ経路）
+  // 保存などメインプロセス起点のリフレッシュ要求
   React.useEffect(() => {
-    const handler = () => {
-      if (projectRoot) {
-        refreshFileTree();
-      }
-    };
-    window.addEventListener('ERNST_REFRESH_FILE_TREE', handler as EventListener);
-    return () => window.removeEventListener('ERNST_REFRESH_FILE_TREE', handler as EventListener);
-  }, [projectRoot]);
+    const handler = () => { refreshFileTree(); };
+    window.addEventListener('ERNST_REFRESH_FILE_TREE', handler);
+    return () => window.removeEventListener('ERNST_REFRESH_FILE_TREE', handler);
+  }, [refreshFileTree]);
 
   return (
     <>

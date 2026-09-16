@@ -313,54 +313,70 @@ export function useBufferManager({
   }, [_tabs, setActiveBuffer, monaco, createModel]);
 
   /**
-   * タブの削除
+   * 複数タブをまとめて閉じる（確認なし）
+   * 呼び出し元のクロージャが古くても取りこぼさないよう、最新のタブ配列を参照する
    */
-  const closeTab = React.useCallback((tabId: string) => {
-    const tabIndex = _tabs.findIndex(tab => tab.id === tabId);
-    if (tabIndex === -1) return;
+  const closeTabs = React.useCallback((tabIds: string[]) => {
+    const currentTabs = _tabsRef.current;
+    const closing = currentTabs.filter(t => tabIds.includes(t.id));
+    if (closing.length === 0) return;
 
-    const tab = _tabs[tabIndex];
-    const isClosingActive = _activeTabId === tabId;
+    const remaining = currentTabs.filter(t => !tabIds.includes(t.id));
+    _setTabs(prev => prev.filter(t => !tabIds.includes(t.id)));
 
-    const newTabs = _tabs.filter(t => t.id !== tabId);
-    _setTabs(newTabs);
+    const disposeClosingModels = () => {
+      closing.forEach(t => {
+        try { t.model?.dispose?.(); } catch (error) { console.warn('📚BufferManager: Model dispose failed:', error); }
+      });
+    };
+
+    const isClosingActive = !!_activeTabId && tabIds.includes(_activeTabId);
+    if (!isClosingActive) {
+      disposeClosingModels();
+      return;
+    }
 
     // アクティブタブが削除された場合は、まず次のタブへ切替えてからモデルを破棄
-    if (isClosingActive) {
-      if (newTabs.length > 0) {
-        const newActiveIndex = Math.min(tabIndex, newTabs.length - 1);
-        const nextActiveTabId = newTabs[newActiveIndex].id;
-        (async () => {
-          // 先にエディタのモデルを切替える
-          await setActiveBuffer(nextActiveTabId);
-          // 直後にフォーカスを確実に与える
-          try {
-            const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
-            editor?.focus?.();
-          } catch {}
-          try { window.dispatchEvent(new Event('ERNST_FOCUS_EDITOR')); } catch {}
-          try { tab.model?.dispose?.(); } catch {}
-        })();
-      } else {
-        _setActiveTabId(null);
-        document.title = 'Ernst Editor';
-        try { tab.model?.dispose?.(); } catch {}
-        // モデル無し状態でもエディタが古いモデルを掴んでいる場合があるので明示的にnull
-        try {
-          const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
-          if (editor) editor.setModel(null);
-        } catch {}
-      }
-    } else {
-      // 非アクティブタブは即破棄
-      try { tab.model?.dispose?.(); } catch {}
+    if (remaining.length > 0) {
+      const activeIndex = currentTabs.findIndex(t => t.id === _activeTabId);
+      const remainingBefore = currentTabs.slice(0, activeIndex).filter(t => !tabIds.includes(t.id)).length;
+      const nextActiveTabId = remaining[Math.min(remainingBefore, remaining.length - 1)].id;
+      (async () => {
+        await setActiveBuffer(nextActiveTabId);
+        window.dispatchEvent(new Event('ERNST_FOCUS_EDITOR'));
+        disposeClosingModels();
+      })();
+      return;
     }
-  }, [_tabs, _activeTabId, setActiveBuffer]);
+
+    _setActiveTabId(null);
+    document.title = 'Ernst Editor';
+    // 破棄前に外しておく（アタッチ中のモデルを破棄するとエディタ側の後始末が走るため）
+    const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+    editor?.setModel?.(null);
+    disposeClosingModels();
+  }, [_activeTabId, setActiveBuffer]);
+
+  /**
+   * タブを閉じる（未保存なら確認する）
+   */
+  const closeTab = React.useCallback((tabId: string) => {
+    const tab = _tabsRef.current.find(t => t.id === tabId);
+    if (!tab) return;
+
+    const currentContent = tab.model && !tab.model.isDisposed?.() ? tab.model.getValue() : tab.content;
+    const isEmptyUntitled = !tab.filePath && !currentContent;
+    if (tab.isModified && !isEmptyUntitled) {
+      const ok = window.confirm(`"${tab.fileName}" has unsaved changes. Close without saving?`);
+      if (!ok) return;
+    }
+    closeTabs([tabId]);
+  }, [closeTabs]);
 
   /**
    * アクティブタブの保存（内蔵機能）
    */
-  const saveActiveTab = React.useCallback(async (): Promise<boolean> => {
+  const saveActiveTab = React.useCallback(async (options?: { format?: boolean }): Promise<boolean> => {
     console.log('📚BufferManager: Saving active tab');
 
     let activeTab = getActiveTab();
@@ -406,27 +422,30 @@ export function useBufferManager({
         return false;
       }
 
-      const content = editorInstance?.getValue?.() ?? activeTab.model?.getValue?.() ?? activeTab.content ?? '';
+      const model = activeTab.model && !activeTab.model.isDisposed?.() ? activeTab.model : null;
+      const content = model?.getValue?.() ?? editorInstance?.getValue?.() ?? activeTab.content ?? '';
+      const versionAtSave = model?.getAlternativeVersionId?.();
 
       // ファイルに保存（GLSLはメイン側でclang-formatが走る）
       if (electronClient) {
-        const result = await electronClient.saveFile(activeTab.filePath, content);
+        const result = await electronClient.saveFile(activeTab.filePath, content, options);
         if (result.success) {
-          const updatedContent = (result as any).formattedContent && typeof (result as any).formattedContent === 'string'
-            ? (result as any).formattedContent
+          // 整形待ちの間に編集されていたら、整形結果で上書きすると入力が消えるので反映しない
+          const editedDuringSave = !!model && (model.isDisposed() || model.getAlternativeVersionId() !== versionAtSave);
+          if (editedDuringSave) {
+            console.warn('📚BufferManager: Buffer changed during save; keeping unsaved edits');
+            return true;
+          }
+
+          const updatedContent = typeof result.formattedContent === 'string' && result.formattedContent.length > 0
+            ? result.formattedContent
             : content;
 
-          // Monacoモデルにも反映
-          try {
-            const model = activeTab.model;
-            if (model && updatedContent !== model.getValue()) {
-              const { applyModelEdits } = require('../utils/monacoUtils');
-              const fullRange = model.getFullModelRange();
-              applyModelEdits(model, [{ range: fullRange, text: updatedContent }]);
-            }
-          } catch {}
+          if (model && updatedContent !== content) {
+            const { applyModelEdits } = require('../utils/monacoUtils');
+            applyModelEdits(model, [{ range: model.getFullModelRange(), text: updatedContent }]);
+          }
 
-          // isModifiedをfalseに更新
           updateTab(activeTab.id, { isModified: false, content: updatedContent });
           console.log('📚BufferManager: File saved successfully');
           return true;
@@ -784,49 +803,36 @@ export function useBufferManager({
   }, [_tabs, setActiveBuffer, addTab]);
 
   // パス管理機能（統合）
+  // フォルダのリネーム/移動/削除にも追従するため、配下のファイルも対象にする
+  const isSameOrInside = (filePath: string, basePath: string): boolean =>
+    filePath === basePath || filePath.startsWith(basePath + '\\') || filePath.startsWith(basePath + '/');
+
   const updateTabPath = React.useCallback((oldPath: string, newPath: string): boolean => {
-    try {
-      const targetTab = _tabs.find(tab => tab.filePath === oldPath);
-      if (!targetTab) {
-        console.log('📚BufferManager: No tab found with path:', oldPath);
-        return false;
-      }
+    const targets = _tabsRef.current.filter(
+      (tab): tab is FileTab & { filePath: string } => !!tab.filePath && isSameOrInside(tab.filePath, oldPath)
+    );
+    if (targets.length === 0) return false;
 
-      // ファイル名を新しいパスから抽出
-      const newFileName = newPath.split(/[/\\]/).pop() || targetTab.fileName;
-
-      // タブのパス情報を更新
-      updateTab(targetTab.id, {
-        filePath: newPath,
-        fileName: newFileName
-      });
-
-      console.log('📚BufferManager: Tab path updated:', oldPath, '->', newPath);
-      return true;
-    } catch (error) {
-      console.error('📚BufferManager: Error updating tab path:', error);
-      return false;
+    for (const tab of targets) {
+      const updatedPath = newPath + tab.filePath.slice(oldPath.length);
+      const updatedFileName = updatedPath.split(/[/\\]/).pop() || tab.fileName;
+      updateTab(tab.id, { filePath: updatedPath, fileName: updatedFileName });
     }
-  }, [_tabs, updateTab]);
+    console.log('📚BufferManager: Tab path updated:', oldPath, '->', newPath, `(${targets.length} tabs)`);
+    return true;
+  }, [updateTab]);
 
   const closeTabByPath = React.useCallback((filePath: string): boolean => {
-    try {
-      const targetTab = _tabs.find(tab => tab.filePath === filePath);
-      if (!targetTab) {
-        console.log('📚BufferManager: No tab found with path:', filePath);
-        return false;
-      }
+    const targetIds = _tabsRef.current
+      .filter(tab => tab.filePath && isSameOrInside(tab.filePath, filePath))
+      .map(tab => tab.id);
+    if (targetIds.length === 0) return false;
 
-      closeTab(targetTab.id);
-      console.log('📚BufferManager: Tab closed by path:', filePath);
-      return true;
-    } catch (error) {
-      console.error('📚BufferManager: Error closing tab by path:', error);
-      return false;
-    }
-  }, [_tabs, closeTab]);
-
-
+    // ファイル自体が削除済みなので確認は出さない
+    closeTabs(targetIds);
+    console.log('📚BufferManager: Tabs closed by path:', filePath, `(${targetIds.length} tabs)`);
+    return true;
+  }, [closeTabs]);
 
     return {
     // 外部インターフェース
