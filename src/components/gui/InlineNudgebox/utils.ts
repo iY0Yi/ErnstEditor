@@ -43,6 +43,8 @@ export function calculateTextWidth(
   return width;
 }
 
+const FLOAT_LITERAL_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?[fF]?$/;
+
 /**
  * 浮動小数点数値を指定された位置または選択範囲から検出
  */
@@ -51,23 +53,26 @@ export function detectFloatAtPositionOrSelection(
   position: monaco.IPosition,
   selection: monaco.ISelection | null
 ): FloatMatch | null {
-  // 選択範囲がある場合は選択範囲内の数値を優先
+  // 選択範囲がある場合は、選択全体が1つの数値リテラルのときだけ採用する
+  // （parseFloat は "0.5 * x" も受理するため、置換で後続テキストが消える）
   if (selection && !isSelectionEmpty(selection)) {
-    // ISelection を IRange に変換
-    const range: monaco.IRange = {
-      startLineNumber: selection.selectionStartLineNumber,
-      startColumn: selection.selectionStartColumn,
-      endLineNumber: selection.positionLineNumber,
-      endColumn: selection.positionColumn
-    };
-    const selectedText = model.getValueInRange(range);
-    const floatValue = parseFloat(selectedText);
-    if (!isNaN(floatValue)) {
-      return {
-        value: floatValue,
-        range: range,
-        text: selectedText
+    // 後方選択でも start <= end になるよう正規化
+    const normalized = monaco.Selection.liftSelection(selection);
+    if (normalized.startLineNumber === normalized.endLineNumber) {
+      const range: monaco.IRange = {
+        startLineNumber: normalized.startLineNumber,
+        startColumn: normalized.startColumn,
+        endLineNumber: normalized.endLineNumber,
+        endColumn: normalized.endColumn
       };
+      const selectedText = model.getValueInRange(range);
+      if (FLOAT_LITERAL_PATTERN.test(selectedText)) {
+        return {
+          value: parseFloat(selectedText),
+          range,
+          text: selectedText
+        };
+      }
     }
   }
 

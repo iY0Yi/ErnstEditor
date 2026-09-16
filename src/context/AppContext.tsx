@@ -3,7 +3,7 @@ import { FileTab } from '../types';
 
 export interface AppContextValue {
   getActiveTab: () => FileTab | null;
-  saveActiveTab: () => Promise<boolean>;
+  saveActiveTab: (options?: { format?: boolean }) => Promise<boolean>;
 }
 
 export const AppContext = React.createContext<AppContextValue | null>(null);

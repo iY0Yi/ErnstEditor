@@ -10,7 +10,6 @@ interface SidebarPanelProps {
   activeFilePath: string | null;
   onSearchResult: (filePath: string, line: number, column: number) => void;
   onProjectRootChange?: (projectRoot: string | null) => void;
-  onRefreshFileTreeCallback?: (callback: () => void) => void;
   onFileRenamed?: (oldPath: string, newPath: string) => void;
   onFileDeleted?: (filePath: string) => void;
   externalProjectRoot?: string | null; // 外部からプロジェクトルートを設定
@@ -21,7 +20,6 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
   activeFilePath,
   onSearchResult,
   onProjectRootChange,
-  onRefreshFileTreeCallback,
   onFileRenamed,
   onFileDeleted,
   externalProjectRoot
@@ -72,7 +70,6 @@ const SidebarPanel: React.FC<SidebarPanelProps> = ({
               onFileSelect={onFileSelect}
               activeFilePath={activeFilePath}
               onProjectRootChange={handleProjectRootChange}
-              onRefreshFileTreeCallback={onRefreshFileTreeCallback}
               onFileRenamed={onFileRenamed}
               onFileDeleted={onFileDeleted}
               externalProjectRoot={projectRoot}

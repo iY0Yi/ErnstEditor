@@ -7,7 +7,7 @@ function getAPI(): ElectronAPI | undefined {
 export const electronClient = {
   // file
   openFile: async () => getAPI()?.openFile() ?? null,
-  saveFile: async (filePath: string, content: string) => getAPI()?.saveFile(filePath, content) ?? { success: false, error: 'API unavailable' },
+  saveFile: async (filePath: string, content: string, options?: { format?: boolean; mustExist?: boolean }): ReturnType<ElectronAPI['saveFile']> => getAPI()?.saveFile(filePath, content, options) ?? { success: false, error: 'API unavailable' },
   saveFileAs: async (content: string) => getAPI()?.saveFileAs(content) ?? { success: false, error: 'API unavailable' },
   readFile: async (filePath: string) => getAPI()?.readFile(filePath) ?? null,
   renameFile: async (oldPath: string, newPath: string) => getAPI()?.renameFile(oldPath, newPath) ?? { success: false, error: 'API unavailable' },

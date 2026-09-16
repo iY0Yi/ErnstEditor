@@ -223,8 +223,6 @@ const App: React.FC = () => {
   // プロジェクト管理フック（パス管理機能はBufferManagerに統合済み）
   const {
     projectName,
-    refreshFileTreeCallback,
-    setRefreshFileTreeCallback,
     handleProjectRootChange,
     setProjectNameDirect
   } = useProjectManager();
@@ -389,17 +387,25 @@ const App: React.FC = () => {
 
 
   // 保存機能（BufferManager内蔵を使用）
+  // ツリーの更新はメインプロセスが保存後に送る explorer:refresh に任せる
   const handleSaveFile = React.useCallback(async () => {
     const success = await saveActiveTab();
     if (!success) {
-      const savedAs = await saveActiveTabAs();
-      if (savedAs) {
-        try { refreshFileTreeCallback?.(); } catch {}
-      }
-      return;
+      await saveActiveTabAs();
     }
-    try { refreshFileTreeCallback?.(); } catch {}
-  }, [saveActiveTab, saveActiveTabAs, refreshFileTreeCallback]);
+  }, [saveActiveTab, saveActiveTabAs]);
+
+  // 未保存の変更があるときはウィンドウを閉じる/リロードする前に止める（確認ダイアログはメイン側で表示）
+  React.useEffect(() => {
+    const hasUnsavedChanges = tabs.some(t => t.isModified && (t.filePath || t.content));
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = false;
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [tabs]);
 
   const handleNewFile = React.useCallback(() => {
     createNewFile();
@@ -451,8 +457,7 @@ const App: React.FC = () => {
           break;
         }
         case 'explorer:refresh': {
-          try { refreshFileTreeCallback?.(); } catch {}
-          try { window.dispatchEvent(new Event('ERNST_REFRESH_FILE_TREE')); } catch {}
+          window.dispatchEvent(new Event('ERNST_REFRESH_FILE_TREE'));
           break;
         }
         default:
@@ -494,7 +499,6 @@ const App: React.FC = () => {
               activeFilePath={activeTab?.filePath || null}
               onSearchResult={handleSearchResult}
               onProjectRootChange={handleTrackDirectoryChange}
-              onRefreshFileTreeCallback={setRefreshFileTreeCallback}
               onFileRenamed={(oldPath: string, newPath: string) => updateTabPath(oldPath, newPath)}
               onFileDeleted={(filePath: string) => closeTabByPath(filePath)}
               externalProjectRoot={trackDirectoryPath}
