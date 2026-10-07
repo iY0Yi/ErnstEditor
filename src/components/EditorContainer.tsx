@@ -94,7 +94,7 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     // InlineNudgeboxManager統合（重要！）
     const { InlineNudgeboxManager } = require('./gui/InlineNudgebox/NudgeboxManager');
     const nudgeboxManager = new InlineNudgeboxManager(updateTab);
-    nudgeboxManager.integrate(editor);
+    nudgeboxManager.integrate(editor, monaco);
 
     // #include パスでの "/" 入力時に補完を強制表示
     try {

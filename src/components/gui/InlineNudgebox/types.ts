@@ -24,16 +24,15 @@ export interface FloatMatch {
 export interface NudgeboxOptions {
   /** 初期値 */
   value: number;
-  /** Monaco エディタでの範囲 */
-  range: monaco.IRange;
   /** 確定時のコールバック */
   onConfirm: (value: number) => void;
   /** キャンセル時のコールバック */
   onCancel: () => void;
   /** リアルタイム値変更時のコールバック */
   onValueChange?: (value: number) => void;
-  /** エディタ参照（ズーム対応用） */
-  editor?: monaco.editor.IStandaloneCodeEditor;
+  editor: monaco.editor.IStandaloneCodeEditor;
+  /** エディタを作った側の Monaco の EditorOption（import した monaco-editor とは番号がずれるため） */
+  editorOption: typeof monaco.editor.EditorOption;
 }
 
 /**
@@ -56,20 +55,6 @@ export interface ArrowKeyStepConfig {
   shiftMultiplier: number;
   /** Ctrl キーでの倍率 */
   ctrlMultiplier: number;
-}
-
-/**
- * ズーム連動設定
- */
-export interface ZoomSyncConfig {
-  /** フォントサイズ倍率 */
-  fontSizeMultiplier: number;
-  /** 行高倍率 */
-  lineHeightMultiplier: number;
-  /** パディング倍率 */
-  paddingMultiplier: number;
-  /** 最小幅 */
-  minWidth: number;
 }
 
 /**

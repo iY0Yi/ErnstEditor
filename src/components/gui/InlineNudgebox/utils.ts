@@ -4,7 +4,7 @@
 
 import * as monaco from 'monaco-editor';
 import { FloatDetector } from '../InlineFloat/markerUtils';
-import { FloatMatch, ArrowKeyStepConfig, ZoomSyncConfig } from './types';
+import { FloatMatch, ArrowKeyStepConfig } from './types';
 
 /**
  * デフォルト設定
@@ -14,34 +14,6 @@ export const DEFAULT_ARROW_KEY_CONFIG: ArrowKeyStepConfig = {
   shiftMultiplier: 10,
   ctrlMultiplier: 0.1
 };
-
-export const DEFAULT_ZOOM_SYNC_CONFIG: ZoomSyncConfig = {
-  fontSizeMultiplier: 1.0,
-  lineHeightMultiplier: 1.4,
-  paddingMultiplier: 0.3,
-  minWidth: 60
-};
-
-/**
- * Monaco Editorの実際のフォントメトリクスを使用してテキスト幅を計算
- */
-export function calculateTextWidth(
-  text: string,
-  editor: monaco.editor.IStandaloneCodeEditor
-): number {
-  const fontSize = editor.getOption(monaco.editor.EditorOption.fontSize);
-  const fontFamily = editor.getOption(monaco.editor.EditorOption.fontFamily);
-
-  // Canvas を使って実際のテキスト幅を測定
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d')!;
-  context.font = `${fontSize}px ${fontFamily}`;
-
-  const width = context.measureText(text).width;
-  canvas.remove(); // メモリリーク防止
-
-  return width;
-}
 
 const FLOAT_LITERAL_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?[fF]?$/;
 
@@ -113,54 +85,6 @@ export function getDecimalPlaces(value: number): number {
   const str = value.toString();
   const dotIndex = str.indexOf('.');
   return dotIndex === -1 ? 0 : str.length - dotIndex - 1;
-}
-
-/**
- * テキストを完全にカバーするための位置調整を計算
- */
-export function calculatePositionAdjustment(
-  editor: monaco.editor.IStandaloneCodeEditor,
-  config: ZoomSyncConfig = DEFAULT_ZOOM_SYNC_CONFIG
-): { translateY: number; zIndex: number } {
-  const fontSize = editor.getOption(monaco.editor.EditorOption.fontSize);
-  let lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight);
-  lineHeight *= 2.0; // ユーザー設定の調整
-
-  return {
-    translateY: lineHeight,
-    zIndex: 1000
-  };
-}
-
-/**
- * ズームレベルに応じたサイズ設定を計算
- */
-export function calculateZoomAdjustedSizes(
-  editor: monaco.editor.IStandaloneCodeEditor,
-  placeholderText: string = 'u_inline1f',
-  config: ZoomSyncConfig = DEFAULT_ZOOM_SYNC_CONFIG
-): {
-  fontSize: number;
-  lineHeight: number;
-  width: number;
-  height: number;
-  padding: number;
-} {
-  const fontSize = editor.getOption(monaco.editor.EditorOption.fontSize);
-  const lineHeight = fontSize * config.lineHeightMultiplier;
-
-  // プレースホルダーテキストの幅を測定
-  const textWidth = calculateTextWidth(placeholderText, editor);
-  const padding = fontSize * config.paddingMultiplier;
-  const width = Math.max(textWidth + padding, config.minWidth);
-
-  return {
-    fontSize,
-    lineHeight,
-    width,
-    height: lineHeight,
-    padding: 0 // 現在の実装ではパディングは 0
-  };
 }
 
 /**
