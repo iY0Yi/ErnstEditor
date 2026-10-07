@@ -4,6 +4,7 @@ import * as path from 'path';
 import { blenderService } from './services/blenderService';
 import { IPC } from './constants/ipc';
 import { execFile } from 'child_process';
+import JSON5 from 'json5';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingFileOpen: { filePath: string; trackPath: string | null } | null = null; // 起動時のファイル開く処理を保留
@@ -105,6 +106,31 @@ function openFileInRenderer(filePath: string, trackPath?: string | null) {
   }
 }
 
+// src/config 配下のファイルパスを解決（開発環境 → ビルド環境の順）
+function resolveConfigPath(relativePath: string): string {
+  const devPath = path.join(__dirname, '../src/config', relativePath);
+  return fs.existsSync(devPath) ? devPath : path.join(__dirname, 'config', relativePath);
+}
+
+function readSettings(): { theme: string } {
+  return JSON5.parse(fs.readFileSync(resolveConfigPath('settings.json'), 'utf-8'));
+}
+
+// VS Code テーマはコメントや末尾カンマを含むことがあるため JSON5 でパースする
+function loadThemeFile(themeName: string): any {
+  const themePath = resolveConfigPath(path.join('presets/themes', `${themeName}.json`));
+  return JSON5.parse(fs.readFileSync(themePath, 'utf-8'));
+}
+
+function getStartupBackgroundColor(): string {
+  try {
+    return loadThemeFile(readSettings().theme).colors?.['editor.background'] ?? '#F1F0E9';
+  } catch (error) {
+    console.error('Failed to resolve startup background color:', error);
+    return '#F1F0E9';
+  }
+}
+
 const createWindow = (): void => {
   // メニューバーを無効化
   Menu.setApplicationMenu(null);
@@ -113,7 +139,7 @@ const createWindow = (): void => {
     width: 1200,
     height: 800,
     frame: false, // ネイティブヘッダー（タイトルバー）を隠す
-    backgroundColor: '#101010', // 読み込み中の背景色
+    backgroundColor: getStartupBackgroundColor(), // 読み込み中の背景色
     show: false, // 準備完了まで非表示
     icon: path.join(__dirname, '../assets/icons/icons/icons/png/256x256.png'), // アプリアイコン
     webPreferences: {
@@ -536,27 +562,12 @@ ipcMain.handle(IPC.WINDOW_CLOSE, async (): Promise<void> => {
   }
 });
 
-// テーマ読み込み用のIPC処理
-ipcMain.handle(IPC.THEME_LOAD, async (event: any, themeName: string = 'ernst-dark'): Promise<any> => {
+// テーマ読み込み用のIPC処理（themeName 省略時は settings.json の設定値）
+ipcMain.handle(IPC.THEME_LOAD, async (_event: any, themeName?: string): Promise<any> => {
   try {
-    // 開発環境とビルド環境の両方に対応
-    let themePath: string;
-
-    // まず開発環境のパスを試す
-    const devPath = path.join(__dirname, '../src/config/presets/themes', `${themeName}.json`);
-    if (fs.existsSync(devPath)) {
-      themePath = devPath;
-    } else {
-      // ビルド環境のパスを試す（dist内）
-      themePath = path.join(__dirname, 'config/presets/themes', `${themeName}.json`);
-    }
-
-    console.log('Loading theme from:', themePath);
-    const themeContent = fs.readFileSync(themePath, 'utf-8');
-    return JSON.parse(themeContent);
+    return loadThemeFile(themeName ?? readSettings().theme);
   } catch (error) {
     console.error('Failed to load theme:', error);
-    console.error('Attempted paths checked');
     return null;
   }
 });

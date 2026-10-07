@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 import { IPC } from './constants/ipc';
+import type { VSCodeTheme } from './types/theme';
 
 interface ElectronAPI {
   // 既存のファイル操作API
@@ -21,7 +22,7 @@ interface ElectronAPI {
   closeWindow: () => Promise<void>;
 
   // テーマ読み込み用API
-  loadTheme: (themeName?: string) => Promise<any>;
+  loadTheme: (themeName?: string) => Promise<VSCodeTheme | null>;
 
   // 検索用API
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<any[]>;

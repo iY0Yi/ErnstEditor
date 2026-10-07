@@ -1,85 +1,64 @@
 {
   "name": "Ernst Monotone",
   "type": "dark",
-  "version": "1.0.0",
-  "ui": {
-    "background": "#222222",
-    "backgroundBright": "#2a2a2a",
-    "backgroundDark": "#1a1a1a",
+  "colors": {
     "foreground": "#cccccc",
-    "foregroundBright": "#ffffff",
-    "foregroundDark": "#999999",
-    "accent": "#888888",
-    "accentHover": "#aaaaaa",
-    "border": "#444444",
-    "borderBright": "#555555",
-    "success": "#888888",
-    "warning": "#aaaaaa",
-    "error": "#cccccc",
-    "info": "#999999"
+    "descriptionForeground": "#999999",
+    "errorForeground": "#cccccc",
+    "editorWarning.foreground": "#aaaaaa",
+    "editorInfo.foreground": "#999999",
+    "gitDecoration.addedResourceForeground": "#888888",
+    "panel.border": "#444444",
+    "editorGroup.border": "#1a1a1a",
+
+    "button.background": "#888888",
+    "button.foreground": "#ffffff",
+    "button.hoverBackground": "#aaaaaa",
+
+    "input.background": "#2a2a2a",
+    "input.border": "#444444",
+    "input.foreground": "#cccccc",
+    "input.placeholderForeground": "#999999",
+
+    "list.hoverBackground": "#2C2C2C",
+    "list.activeSelectionBackground": "#353535",
+    "list.activeSelectionForeground": "#efebdc",
+
+    "sideBar.background": "#262525",
+    "sideBar.foreground": "#d8d4c5",
+    "sideBar.border": "#6f6b5c",
+
+    "titleBar.activeBackground": "#262525",
+    "titleBar.activeForeground": "#d8d4c5",
+    "titleBar.border": "#6f6b5c",
+
+    "editorGroupHeader.tabsBackground": "#262525",
+    "tab.inactiveForeground": "#6f6b5c",
+    "tab.activeBackground": "#353535",
+    "tab.activeForeground": "#d8d4c5",
+
+    "editor.background": "#222222",
+    "editor.foreground": "#cccccc",
+    "editor.lineHighlightBackground": "#2a2a2a",
+    "editor.selectionBackground": "#444444",
+    "editor.findMatchBackground": "#555555",
+    "editor.wordHighlightBackground": "#44444480",
+    "editor.wordHighlightStrongBackground": "#55555580",
+    "editorCursor.foreground": "#ffffff",
+    "editorLineNumber.foreground": "#666666",
+    "editorLineNumber.activeForeground": "#cccccc",
+    "editorRuler.foreground": "#333333",
+    "editorBracketMatch.border": "#888888",
+    "editorIndentGuide.background": "#333333",
+    "editorWhitespace.foreground": "#444444"
   },
-  "opacity": {
-    "foregroundAlpha10": "rgba(216, 212, 197, 0.1)",
-    "foregroundAlpha15": "rgba(216, 212, 197, 0.15)",
-    "foregroundAlpha20": "rgba(216, 212, 197, 0.2)",
-    "foregroundDarkAlpha20": "rgba(111, 107, 92, 0.2)",
-    "foregroundDarkAlpha30": "rgba(111, 107, 92, 0.3)"
-  },
-  "syntax": {
-    "keyword": "#cccccc",
-    "string": "#999999",
-    "comment": "#666666",
-    "number": "#aaaaaa",
-    "operator": "#cccccc",
-    "function": "#bbbbbb",
-    "variable": "#aaaaaa",
-    "type": "#bbbbbb",
-    "constant": "#cccccc",
-    "property": "#999999",
-    "tag": "#bbbbbb",
-    "attribute": "#aaaaaa",
-    "punctuation": "#cccccc",
-    "bracket": "#cccccc",
-    "brace": "#cccccc",
-    "parenthesis": "#cccccc"
-  },
-  "editor": {
-    "background": "#222222",
-    "foreground": "#cccccc",
-    "lineHighlight": "#2a2a2a",
-    "selection": "#444444",
-    "findMatch": "#555555",
-    "cursor": "#ffffff",
-    "wordHighlight": "#44444480",
-    "wordHighlightStrong": "#55555580",
-    "lineNumber": "#666666",
-    "lineNumberActive": "#cccccc",
-    "ruler": "#333333",
-    "bracket": "#cccccc",
-    "bracketMatch": "#888888",
-    "indent": "#333333",
-    "whitespace": "#444444"
-  },
-  "components": {
-    "sidebar": {
-      "background": "#262525",
-      "foreground": "#d8d4c5",
-      "border": "#6f6b5c",
-      "hover": "#2C2C2C",
-      "activeBackground": "#353535",
-      "activeForeground": "#efebdc"
-    },
-    "header": {
-      "background": "#262525",
-      "foreground": "#d8d4c5",
-      "border": "#6f6b5c"
-    },
-    "tabs": {
-      "background": "#262525",
-      "foreground": "#6f6b5c",
-      "activeBackground": "#353535",
-      "activeForeground": "#d8d4c5",
-      "border": "#6f6b5c"
-    }
-  }
+  "tokenColors": [
+    { "scope": "comment", "settings": { "foreground": "#666666" } },
+    { "scope": ["keyword", "keyword.operator", "constant", "punctuation"], "settings": { "foreground": "#cccccc" } },
+    { "scope": "string", "settings": { "foreground": "#999999" } },
+    { "scope": "constant.numeric", "settings": { "foreground": "#aaaaaa" } },
+    { "scope": ["entity.name.function", "support.function", "storage.type", "support.type", "entity.name.type", "entity.name.tag"], "settings": { "foreground": "#bbbbbb" } },
+    { "scope": ["variable", "entity.other.attribute-name"], "settings": { "foreground": "#aaaaaa" } },
+    { "scope": "support.type.property-name", "settings": { "foreground": "#999999" } }
+  ]
 }

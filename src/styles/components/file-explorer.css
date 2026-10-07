@@ -225,7 +225,7 @@
 /* 空ファイルメッセージ */
 .file-explorer-empty-message {
   padding: 16px;
-  color: #888;
+  color: var(--theme-ui-foreground-dark);
   font-size: 12px;
   text-align: center;
 }
@@ -246,8 +246,8 @@
 /* コンテキストメニュー */
 .context-menu-overlay {
   position: fixed;
-  background: #2d2d2d;
-  border: 1px solid #404040;
+  background: var(--theme-menu-background);
+  border: 1px solid var(--theme-menu-border);
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   z-index: 1000;
@@ -259,7 +259,7 @@
   width: 100%;
   background: transparent;
   border: none;
-  color: white;
+  color: var(--theme-menu-foreground);
   padding: 8px 12px;
   font-size: 13px;
   cursor: pointer;
@@ -268,12 +268,12 @@
 }
 
 .context-menu-button:hover {
-  background: #404040;
+  background: var(--theme-menu-hover);
 }
 
 /* 削除ボタン（赤色） */
 .context-menu-button.delete {
-  color: #ff6b6b;
+  color: var(--theme-ui-error);
 }
 
 /* スクロールバー */

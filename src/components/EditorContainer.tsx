@@ -11,9 +11,11 @@ import React, { useEffect, useRef, useContext } from 'react';
 import Editor from '@monaco-editor/react';
 import { FileTab } from '../types';
 import { AppContext } from '../context/AppContext';
+import { ResolvedTheme } from '../types/theme';
+import { MONACO_THEME_ID } from '../utils/monacoThemeUtils';
 
 interface EditorContainerProps {
-  theme: any;
+  theme: ResolvedTheme | null;
   activeTab: FileTab | null;
   getActiveTab: () => FileTab | null;
   updateTab: (tabId: string, updates: Partial<FileTab>) => void;
@@ -198,7 +200,7 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     <div className="editor-container">
       <Editor
         height="100%"
-        theme={theme ? `ernst-${theme.name.toLowerCase().replace(/\s+/g, '-')}` : "vs-dark"}
+        theme={theme ? MONACO_THEME_ID : "vs-dark"}
         beforeMount={handleBeforeMount}
         onMount={handleEditorMount}
         onChange={onEditorChange}

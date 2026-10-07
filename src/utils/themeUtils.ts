@@ -1,188 +1,122 @@
-import { Theme } from '../types/theme';
+import { VSCodeTheme, ResolvedTheme } from '../types/theme';
+import { isHexColor, luminance, parseHex, withAlpha } from './colorUtils';
+import { createMonacoTheme } from './monacoThemeUtils';
 
-// テーマをCSS変数として適用する
-export function applyThemeToDOM(theme: Theme): void {
-  const root = document.documentElement;
+type VarResolver = (colors: Record<string, string>, resolved: Record<string, string>) => string;
 
-  // UI色
-  root.style.setProperty('--theme-ui-background', theme.ui.background);
-  root.style.setProperty('--theme-ui-background-bright', theme.ui.backgroundBright);
-  root.style.setProperty('--theme-ui-background-dark', theme.ui.backgroundDark);
-  root.style.setProperty('--theme-ui-foreground', theme.ui.foreground);
-  root.style.setProperty('--theme-ui-foreground-bright', theme.ui.foregroundBright);
-  root.style.setProperty('--theme-ui-foreground-dark', theme.ui.foregroundDark);
-  root.style.setProperty('--theme-ui-success', theme.ui.success);
-  root.style.setProperty('--theme-ui-warning', theme.ui.warning);
-  root.style.setProperty('--theme-ui-error', theme.ui.error);
-  root.style.setProperty('--theme-ui-info', theme.ui.info);
-  root.style.setProperty('--theme-ui-accent', theme.ui.accent);
-  root.style.setProperty('--theme-ui-border', theme.ui.border);
+// CSS 変数 → VS Code の色キー候補（先勝ち）。いずれも未定義なら fallback を使う
+// fallback では先に解決済みの CSS 変数を参照できるため、並び順に意味がある
+const pick = (keys: string[], fallback: VarResolver): VarResolver => (colors, resolved) => {
+  const key = keys.find(k => colors[k] !== undefined);
+  return key ? colors[key] : fallback(colors, resolved);
+};
+const ref = (cssVar: string): VarResolver => (_colors, resolved) => resolved[cssVar];
+const literal = (value: string): VarResolver => () => value;
+const alphaOf = (cssVar: string, alpha: number): VarResolver => (_colors, resolved) => withAlpha(resolved[cssVar], alpha);
 
-  // 透明度付き色
-  root.style.setProperty('--theme-opacity-foreground-alpha10', theme.opacity.foregroundAlpha10);
-  root.style.setProperty('--theme-opacity-foreground-alpha15', theme.opacity.foregroundAlpha15);
-  root.style.setProperty('--theme-opacity-foreground-alpha20', theme.opacity.foregroundAlpha20);
-  root.style.setProperty('--theme-opacity-foreground-dark-alpha20', theme.opacity.foregroundDarkAlpha20);
-  root.style.setProperty('--theme-opacity-foreground-dark-alpha30', theme.opacity.foregroundDarkAlpha30);
-  root.style.setProperty('--theme-opacity-success-alpha20', theme.opacity.successAlpha20);
-  root.style.setProperty('--theme-opacity-warning-alpha20', theme.opacity.warningAlpha20);
-  root.style.setProperty('--theme-opacity-error-alpha20', theme.opacity.errorAlpha20);
+const CSS_VAR_MAP: Array<[string, VarResolver]> = [
+  ['--theme-ui-background', pick(['editor.background'], literal('#1e1e1e'))],
+  ['--theme-ui-foreground', pick(['foreground', 'editor.foreground'], literal('#cccccc'))],
+  ['--theme-ui-foreground-bright', pick(['list.activeSelectionForeground', 'editor.foreground'], ref('--theme-ui-foreground'))],
+  ['--theme-ui-foreground-dark', pick(['descriptionForeground', 'tab.inactiveForeground'], alphaOf('--theme-ui-foreground', 0.6))],
+  ['--theme-ui-border', pick(['panel.border', 'sideBar.border', 'editorGroup.border'], alphaOf('--theme-ui-foreground', 0.2))],
+  ['--theme-ui-background-dark', pick(['editorGroup.border', 'sideBar.border', 'panel.border'], ref('--theme-ui-border'))],
+  ['--theme-ui-background-bright', pick(['list.hoverBackground', 'input.background'], alphaOf('--theme-ui-foreground', 0.1))],
+  ['--theme-ui-background-light', pick(['list.hoverBackground', 'input.background'], ref('--theme-ui-background-bright'))],
+  ['--theme-ui-background-lighter', pick(['list.activeSelectionBackground'], ref('--theme-ui-background-light'))],
+  ['--theme-ui-success', pick(['gitDecoration.addedResourceForeground', 'terminal.ansiGreen'], literal('#3aab5f'))],
+  ['--theme-ui-warning', pick(['editorWarning.foreground', 'list.warningForeground'], literal('#ff6044'))],
+  ['--theme-ui-error', pick(['errorForeground', 'editorError.foreground'], literal('#cf222e'))],
+  ['--theme-ui-info', pick(['editorInfo.foreground'], literal('#609cdf'))],
+  ['--theme-editor-background', ref('--theme-ui-background')],
 
-  // コンポーネント色
-  root.style.setProperty('--theme-sidebar-background', theme.components.sidebar.background);
-  root.style.setProperty('--theme-sidebar-foreground', theme.components.sidebar.foreground);
-  root.style.setProperty('--theme-sidebar-border', theme.components.sidebar.border);
-  root.style.setProperty('--theme-sidebar-hover', theme.components.sidebar.hover);
-  root.style.setProperty('--theme-sidebar-active-background', theme.components.sidebar.activeBackground);
-  root.style.setProperty('--theme-sidebar-active-foreground', theme.components.sidebar.activeForeground);
+  ['--theme-accent-color', pick(['button.background', 'textLink.foreground'], ref('--theme-ui-foreground'))],
+  ['--theme-accent-hover', pick(['button.hoverBackground'], ref('--theme-accent-color'))],
+  ['--theme-accent-color-alpha', alphaOf('--theme-accent-color', 0.2)],
+  ['--theme-on-accent', pick(['button.foreground'], ref('--theme-ui-background'))],
 
-  // サイドバータブとホバー効果
-  root.style.setProperty('--theme-sidebar-activeTab', theme.components.sidebar.border);
-  root.style.setProperty('--theme-sidebar-hoverBackground', theme.ui.backgroundBright);
-  root.style.setProperty('--theme-sidebar-activeForeground', theme.ui.foregroundBright);
+  ['--theme-sidebar-background', pick(['sideBar.background'], ref('--theme-ui-background'))],
+  ['--theme-sidebar-foreground', pick(['sideBar.foreground'], ref('--theme-ui-foreground'))],
+  ['--theme-sidebar-foreground-alpha50', alphaOf('--theme-sidebar-foreground', 0.5)],
+  ['--theme-sidebar-border', pick(['sideBar.border'], ref('--theme-ui-border'))],
+  // CSS 側で表記ゆれが3種あるため全て設定する
+  ['--theme-sidebar-hover', pick(['list.hoverBackground'], ref('--theme-ui-background-bright'))],
+  ['--theme-sidebar-hoverBackground', ref('--theme-sidebar-hover')],
+  ['--theme-sidebar-hover-background', ref('--theme-sidebar-hover')],
+  ['--theme-sidebar-active-background', pick(['list.activeSelectionBackground'], ref('--theme-ui-background-lighter'))],
 
-  // 検索関連
-  root.style.setProperty('--theme-search-highlight', theme.ui.accent);
-  root.style.setProperty('--theme-search-highlightText', theme.ui.background);
+  ['--theme-input-background', pick(['input.background'], ref('--theme-ui-background-light'))],
+  ['--theme-input-border', pick(['input.border', 'dropdown.border'], ref('--theme-ui-border'))],
+  ['--theme-input-foreground', pick(['input.foreground'], ref('--theme-ui-foreground'))],
+  ['--theme-input-placeholder', pick(['input.placeholderForeground'], ref('--theme-ui-foreground-dark'))],
 
-  // 入力フィールド
-  root.style.setProperty('--theme-input-background', theme.ui.backgroundBright);
-  root.style.setProperty('--theme-input-border', theme.components.sidebar.border);
-  root.style.setProperty('--theme-input-foreground', theme.ui.foreground);
-  root.style.setProperty('--theme-input-placeholder', theme.ui.foregroundDark);
+  ['--theme-header-background', pick(['titleBar.activeBackground'], ref('--theme-ui-background'))],
+  ['--theme-header-foreground', pick(['titleBar.activeForeground'], ref('--theme-ui-foreground'))],
 
-  // スクロールバー
-  root.style.setProperty('--theme-scrollbar-thumb', theme.components.sidebar.border);
+  ['--theme-tabs-background', pick(['editorGroupHeader.tabsBackground'], ref('--theme-ui-background'))],
+  ['--theme-tabs-foreground', pick(['tab.inactiveForeground'], ref('--theme-ui-foreground-dark'))],
+  ['--theme-tabs-active-background', pick(['tab.activeBackground'], ref('--theme-ui-background'))],
+  ['--theme-tabs-active-foreground', pick(['tab.activeForeground'], ref('--theme-ui-foreground'))],
+  ['--theme-tabs-modified-foreground', ref('--theme-ui-foreground-bright')],
+  ['--theme-tabs-active-modified-foreground', ref('--theme-ui-foreground-bright')],
+  ['--theme-tabs-modified-dot', ref('--theme-ui-foreground-bright')],
 
-  root.style.setProperty('--theme-header-background', theme.components.header.background);
-  root.style.setProperty('--theme-header-foreground', theme.components.header.foreground);
-  root.style.setProperty('--theme-header-border', theme.components.header.border);
+  ['--theme-button-background', pick(['button.secondaryBackground', 'input.background'], ref('--theme-ui-background-light'))],
+  ['--theme-button-border', pick(['button.border', 'input.border'], ref('--theme-ui-border'))],
+  ['--theme-button-hover', pick(['button.secondaryHoverBackground', 'list.hoverBackground'], ref('--theme-ui-background-lighter'))],
 
-  root.style.setProperty('--theme-tabs-background', theme.components.tabs.background);
-  root.style.setProperty('--theme-tabs-foreground', theme.components.tabs.foreground);
-  root.style.setProperty('--theme-tabs-active-background', theme.components.tabs.activeBackground);
-  root.style.setProperty('--theme-tabs-active-foreground', theme.components.tabs.activeForeground);
-  root.style.setProperty('--theme-tabs-border', theme.components.tabs.border);
+  ['--theme-menu-background', pick(['menu.background', 'editorWidget.background', 'dropdown.background'], ref('--theme-ui-background'))],
+  ['--theme-menu-foreground', pick(['menu.foreground'], ref('--theme-ui-foreground'))],
+  ['--theme-menu-border', pick(['menu.border', 'editorWidget.border', 'widget.border'], ref('--theme-ui-border'))],
+  ['--theme-menu-hover', pick(['menu.selectionBackground', 'list.hoverBackground'], ref('--theme-ui-background-bright'))],
 
+  ['--theme-search-highlight', ref('--theme-accent-color')],
+  ['--theme-search-highlightText', ref('--theme-on-accent')],
+];
 
-
-  // エディター色
-  root.style.setProperty('--theme-editor-background', theme.editor.background);
-  root.style.setProperty('--theme-editor-foreground', theme.editor.foreground);
-  root.style.setProperty('--theme-editor-selection-background', theme.editor.selectionBackground);
-  root.style.setProperty('--theme-editor-line-highlight-background', theme.editor.lineHighlightBackground);
-  root.style.setProperty('--theme-editor-cursor-foreground', theme.editor.cursorForeground);
-  root.style.setProperty('--theme-editor-line-number-foreground', theme.editor.lineNumberForeground);
-  root.style.setProperty('--theme-editor-line-number-active-foreground', theme.editor.lineNumberActiveForeground);
-  root.style.setProperty('--theme-editor-whitespace-foreground', theme.editor.whitespaceForeground);
-  root.style.setProperty('--theme-editor-find-match-background', theme.editor.findMatchBackground);
-  root.style.setProperty('--theme-editor-find-match-highlight-background', theme.editor.findMatchHighlightBackground);
-  root.style.setProperty('--theme-editor-selection-highlight-background', theme.editor.selectionHighlightBackground);
+// 完全透明の色（Vitesse の focusBorder 等）は「未指定」として扱う
+function usableColors(theme: VSCodeTheme): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(theme.colors ?? {}).filter(([, value]) => isHexColor(value) && parseHex(value)!.a > 0)
+  );
 }
 
-// テーマファイルを読み込む
-export async function loadTheme(themeName: string = 'ernst-dark'): Promise<Theme> {
-  try {
-    // ElectronのIPCを使用してテーマを読み込む
-    const { electronClient } = require('../services/electronClient');
-    if (electronClient) {
-      const themeData = await electronClient.loadTheme(themeName);
-      if (themeData) {
-        return themeData;
-      }
-    }
+function detectType(theme: VSCodeTheme, colors: Record<string, string>): ResolvedTheme['type'] {
+  if (theme.type === 'light' || theme.type === 'hcLight') return 'light';
+  if (theme.type === 'dark' || theme.type === 'hc') return 'dark';
+  if (theme.base === 'vs') return 'light';
+  if (theme.base === 'vs-dark' || theme.base === 'hc-black') return 'dark';
+  const background = colors['editor.background'];
+  return background && luminance(background) > 0.5 ? 'light' : 'dark';
+}
 
-    // IPCが利用できない場合やテーマが見つからない場合はフォールバック
-    console.warn('Failed to load theme via IPC, using fallback');
-    return getDefaultTheme();
-  } catch (error) {
-    console.error('Failed to load theme, using fallback:', error);
-    // フォールバック用のデフォルトテーマ
-    return getDefaultTheme();
+export function resolveTheme(theme: VSCodeTheme): ResolvedTheme {
+  const colors = usableColors(theme);
+  const type = detectType(theme, colors);
+  const cssVars: Record<string, string> = {};
+  for (const [cssVar, resolve] of CSS_VAR_MAP) {
+    cssVars[cssVar] = resolve(colors, cssVars);
   }
+  return { name: theme.name, type, cssVars, monaco: createMonacoTheme(theme, type) };
 }
 
-// デフォルトテーマ（フォールバック）
-export function getDefaultTheme(): Theme {
-  return {
-    name: "Ernst Dark",
-    type: "dark",
-    ui: {
-      background: "#181818",
-      backgroundBright: "#202020",
-      backgroundDark: "#000000",
-      foreground: "#BBBBBB",
-      foregroundBright: "#EEEEEE",
-      foregroundDark: "#555555",
-      success: "#3aab5f",
-      warning: "#ff6044",
-      error: "#cf222e",
-      info: "#609cdf",
-      accent: "#555555",
-      border: "#555555"
-    },
-    opacity: {
-      foregroundAlpha10: "rgba(187, 187, 187, 0.1)",
-      foregroundAlpha15: "rgba(187, 187, 187, 0.15)",
-      foregroundAlpha20: "rgba(187, 187, 187, 0.2)",
-      foregroundDarkAlpha20: "rgba(102, 102, 102, 0.2)",
-      foregroundDarkAlpha30: "rgba(102, 102, 102, 0.3)",
-      successAlpha20: "rgba(58, 171, 95, 0.2)",
-      warningAlpha20: "rgba(255, 96, 68, 0.2)",
-      errorAlpha20: "rgba(207, 34, 46, 0.2)"
-    },
-    syntax: {
-      default: "BBBBBB",
-      comment: "666666",
-      keyword: "3aab5f",
-      keywordControl: "3aab5f",
-      keywordType: "3aab5f",
-      keywordFunction: "609cdf",
-      keywordStorage: "3aab5f",
-      string: "032f62",
-      stringEscape: "c739ff",
-      number: "c739ff",
-      constant: "c739ff",
-      variable: "BBBBBB",
-      function: "609cdf",
-      operator: "ff6044",
-      delimiter: "555555",
-      preprocessor: "888888"
-    },
-    editor: {
-      background: "#181818",
-      foreground: "#BBBBBB",
-      selectionBackground: "#BBBBBB44",
-      lineHighlightBackground: "#202020",
-      cursorForeground: "#BBBBBB",
-      lineNumberForeground: "#666666",
-      lineNumberActiveForeground: "#BBBBBB",
-      whitespaceForeground: "#555555",
-      findMatchBackground: "#BBBBBB66",
-      findMatchHighlightBackground: "#BBBBBB44",
-      selectionHighlightBackground: "#BBBBBB44"
-    },
-    components: {
-      sidebar: {
-        background: "#181818",
-        foreground: "#BBBBBB",
-        border: "#555555",
-        hover: "#202020",
-        activeBackground: "#262626",
-        activeForeground: "#EEEEEE"
-      },
-      header: {
-        background: "#181818",
-        foreground: "#BBBBBB",
-        border: "#555555"
-      },
-      tabs: {
-        background: "#181818",
-        foreground: "#666666",
-        activeBackground: "#262626",
-        activeForeground: "#BBBBBB",
-        border: "#555555"
-      }
-    }
-  };
+export function applyThemeToDOM(theme: ResolvedTheme): void {
+  const root = document.documentElement;
+  for (const [cssVar, value] of Object.entries(theme.cssVars)) {
+    root.style.setProperty(cssVar, value);
+  }
+  root.style.colorScheme = theme.type;
+}
+
+// settings.json で指定されたテーマを読み込む。失敗時は同梱の Vitesse Light Soft にフォールバック
+export async function loadTheme(): Promise<VSCodeTheme> {
+  const { electronClient } = require('../services/electronClient');
+  const themeData: VSCodeTheme | null = await electronClient.loadTheme();
+  if (themeData) return themeData;
+  console.warn('Failed to load theme via IPC, using fallback');
+  return getDefaultTheme();
+}
+
+export function getDefaultTheme(): VSCodeTheme {
+  return require('../config/presets/themes/vitesse-light-soft.json');
 }

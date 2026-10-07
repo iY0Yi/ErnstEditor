@@ -94,7 +94,7 @@
 .tab-close-button {
   background: none;
   border: none;
-  color: #999;
+  color: var(--theme-tabs-foreground);
   cursor: pointer;
   font-size: 16px;
   margin-left: 8px;
@@ -113,5 +113,5 @@
 }
 
 .tab-close-button:hover {
-  color: #fff;
+  color: var(--theme-tabs-active-foreground);
 }

@@ -50,7 +50,7 @@
 /* 検索ボタン */
 .search-button {
   background: var(--theme-accent-color, #007acc);
-  color: white;
+  color: var(--theme-on-accent);
   border: none;
   padding: 8px 12px;
   cursor: pointer;
@@ -129,7 +129,7 @@
 /* マッチ数バッジ */
 .search-match-count {
   background: var(--theme-accent-color, #007acc);
-  color: white;
+  color: var(--theme-on-accent);
   padding: 2px 6px;
   border-radius: 10px;
   font-size: 10px;
