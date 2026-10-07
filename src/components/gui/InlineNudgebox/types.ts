@@ -31,8 +31,6 @@ export interface NudgeboxOptions {
   /** リアルタイム値変更時のコールバック */
   onValueChange?: (value: number) => void;
   editor: monaco.editor.IStandaloneCodeEditor;
-  /** エディタを作った側の Monaco の EditorOption（import した monaco-editor とは番号がずれるため） */
-  editorOption: typeof monaco.editor.EditorOption;
 }
 
 /**

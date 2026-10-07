@@ -194,8 +194,8 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
       preference: [monaco.editor.ContentWidgetPositionPreference.EXACT]
     };
 
-    const { editor, editorOption } = this.options;
-    const { fontSize, lineHeight } = editor.getOption(editorOption.fontInfo);
+    const { editor } = this.options;
+    const { fontSize, lineHeight } = editor.getOption(monaco.editor.EditorOption.fontInfo);
 
     this.numberInput.style.fontSize = `${fontSize}px`;
     this.numberInput.style.lineHeight = `${lineHeight}px`;
@@ -204,14 +204,14 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
   }
 
   private measureRangeWidth(range: monaco.IRange): number {
-    const { editor, editorOption } = this.options;
+    const { editor } = this.options;
     const start = editor.getOffsetForColumn(range.startLineNumber, range.startColumn);
     const end = editor.getOffsetForColumn(range.endLineNumber, range.endColumn);
     if (start >= 0 && end > start) {
       return end - start;
     }
     // 行が描画されていないと実測できないので、エディタのフォント情報から概算する
-    const { typicalHalfwidthCharacterWidth } = editor.getOption(editorOption.fontInfo);
+    const { typicalHalfwidthCharacterWidth } = editor.getOption(monaco.editor.EditorOption.fontInfo);
     return typicalHalfwidthCharacterWidth * UNIFORM_NAME.length;
   }
 }
