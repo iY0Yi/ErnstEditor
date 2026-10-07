@@ -1,3 +1,5 @@
+import type { VSCodeTheme } from './theme';
+
 // 検索結果型定義
 export interface SearchResult {
   filePath: string;
@@ -32,7 +34,7 @@ export interface ElectronAPI {
   closeWindow: () => Promise<void>;
 
   // テーマ読み込み用API
-  loadTheme: (themeName?: string) => Promise<any>;
+  loadTheme: (themeName?: string) => Promise<VSCodeTheme | null>;
 
   // 検索用API
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<SearchResult[]>;

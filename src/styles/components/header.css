@@ -109,7 +109,7 @@
 }
 
 .shortcut {
-  color: var(--theme-ui-background-light);
+  color: var(--theme-ui-foreground-dark);
   font-size: 12px;
   margin-left: 16px;
 }
@@ -126,7 +126,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: var(--theme-ui-background-light);
+  color: var(--theme-ui-foreground-dark);
   font-weight: 500;
 }
 
@@ -136,7 +136,7 @@
 }
 
 .separator {
-  color: var(--theme-ui-background-light);
+  color: var(--theme-ui-foreground-dark);
   font-weight: 300;
 }
 
@@ -160,16 +160,16 @@
 }
 
 .connection-status.error {
-  background-color: #cf222e;
+  background-color: var(--theme-ui-error);
 }
 
 .connection-status.disconnected {
-  color: var(--theme-ui-background-light);
+  color: var(--theme-ui-foreground-dark);
   background-color: var(--theme-ui-background-dark);
 }
 
 .connection-status.connected {
-  background-color: #3aab5f;
+  background-color: var(--theme-ui-success);
 }
 
 .connection-indicator-icon {
@@ -215,7 +215,7 @@
 }
 
 .window-control.close:hover {
-  background-color: #cf222e;
+  background-color: var(--theme-ui-error);
   color: white;
 }
 

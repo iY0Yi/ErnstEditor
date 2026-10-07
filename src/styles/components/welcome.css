@@ -28,7 +28,7 @@
 }
 
 .ernst-logo .cls-1 {
-  fill: white;
+  fill: var(--theme-ui-foreground-bright);
 }
 
 .ernst-logo .logo-background {

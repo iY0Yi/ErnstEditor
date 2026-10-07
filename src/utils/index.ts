@@ -16,8 +16,8 @@ export { generateId } from './idUtils';
 export { sendValueToBlender, checkBlenderConnection, forceStartBlenderServer } from './blenderUtils';
 
 // テーマ・UI
-export { applyThemeToDOM, loadTheme, getDefaultTheme } from './themeUtils';
-export { createMonacoTheme } from './monacoThemeUtils';
+export { applyThemeToDOM, loadTheme, getDefaultTheme, resolveTheme } from './themeUtils';
+export { createMonacoTheme, applyMonacoTheme, MONACO_THEME_ID } from './monacoThemeUtils';
 
 // バリデーション・フォーマット
 export { Validation } from './validation';
