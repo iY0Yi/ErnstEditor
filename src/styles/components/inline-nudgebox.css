@@ -24,7 +24,7 @@
   border: 0px solid var(--theme-input-border, #565656);
   border-radius: 0px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  /* padding, min-width は TypeScript で動的に設定 */
+  height: 100%;
 }
 
 .inline-nudgebox-input {
@@ -35,8 +35,10 @@
   font-family: inherit;
   font-size: inherit;
   width: 100%;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
   text-align: center;
-  /* padding, height は TypeScript で動的に設定 */
 }
 
 /* 数値入力の上下矢印ボタンを表示 */
@@ -124,10 +126,8 @@
 @keyframes nudgeboxFadeIn {
   from {
     opacity: 0;
-    transform: translateY(-2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }

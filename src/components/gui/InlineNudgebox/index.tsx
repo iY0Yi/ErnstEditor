@@ -18,7 +18,6 @@ export type {
   NudgeboxOptions,
   NudgeboxPosition,
   ArrowKeyStepConfig,
-  ZoomSyncConfig,
   BlenderCommunicationConfig
 } from './types';
 
@@ -28,15 +27,11 @@ export { NudgeboxWidget } from './NudgeboxWidget';
 
 // ===== ユーティリティ関数 =====
 export {
-  calculateTextWidth,
   detectFloatAtPositionOrSelection,
   calculateArrowKeyStep,
   getDecimalPlaces,
-  calculatePositionAdjustment,
-  calculateZoomAdjustedSizes,
   createRange,
   DEFAULT_ARROW_KEY_CONFIG,
-  DEFAULT_ZOOM_SYNC_CONFIG,
   UNIFORM_NAME,
   IPC_CHANNELS
 } from './utils';

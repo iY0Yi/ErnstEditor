@@ -35,6 +35,7 @@ interface SaveTarget {
  */
 export class InlineNudgeboxManager {
   private editor!: monaco.editor.IStandaloneCodeEditor; // ! で初期化遅延を明示
+  private editorOption!: typeof monaco.editor.EditorOption;
   private widget: NudgeboxWidget | null = null;
   private session: NudgeSession | null = null;
   private updateTabCallback: (tabId: string, updates: Partial<FileTab>) => void;
@@ -48,21 +49,24 @@ export class InlineNudgeboxManager {
 
   /**
    * Monaco Editor と統合
+   * エディタは @monaco-editor/react が読み込む Monaco で作られ、import している monaco-editor とは版が違う。
+   * EditorOption の番号は版ごとにずれるので、エディタを作った側の Monaco（runtimeMonaco）の値を使う
    */
-  public integrate(editor: monaco.editor.IStandaloneCodeEditor): void {
+  public integrate(editor: monaco.editor.IStandaloneCodeEditor, runtimeMonaco: typeof monaco): void {
     this.editor = editor;
+    this.editorOption = runtimeMonaco.editor.EditorOption;
     this.setupKeyBindings();
 
     this.listeners.forEach(l => l.dispose());
     this.listeners = [
-      // レイアウト変化で位置・サイズを追従
-      this.editor.onDidLayoutChange(() => {
-        const range = this.getPlaceholderRange();
-        if (this.widget && range) {
-          this.widget.setPosition(range);
-          this.widget.updateSizeForCurrentZoom();
+      // レイアウト・ズーム・置換箇所より前の編集で、置換箇所に重ねた位置とサイズがずれないよう追従する
+      this.editor.onDidLayoutChange(() => this.layoutWidget()),
+      this.editor.onDidChangeConfiguration((e) => {
+        if (e.hasChanged(this.editorOption.fontInfo)) {
+          this.layoutWidget();
         }
       }),
+      this.editor.onDidChangeModelContent(() => this.layoutWidget()),
       // タブ切替・タブを閉じる操作で表示中のモデルが変わったら、元の値に戻して終了する
       this.editor.onDidChangeModel(() => {
         if (this.session) {
@@ -133,22 +137,30 @@ export class InlineNudgeboxManager {
 
     this.widget = new NudgeboxWidget({
       value: floatMatch.value,
-      range: floatMatch.range,  // 元の数値の範囲
       onConfirm: (value) => this.finish({ confirmed: true, value }),
       onCancel: () => this.finish({ confirmed: false }),
       onValueChange: (value) => this.sendValueToBlenderInternal(value),
-      editor: this.editor // エディタ参照を渡してズーム対応
+      editor: this.editor,
+      editorOption: this.editorOption
     });
 
-    // 元の数値の位置に配置（+u_inline1fを隠すため）
-    this.widget.setPosition(floatMatch.range);
+    const placeholderRange = this.getPlaceholderRange();
+    if (placeholderRange) {
+      this.widget.update(placeholderRange);
+    }
     this.editor.addContentWidget(this.widget);
+    this.widget.focus();
+  }
 
-    // 現在のズームレベルに合わせて強制的にサイズ更新
-    setTimeout(() => {
-      this.widget?.updateSizeForCurrentZoom();
-      this.widget?.focus();
-    }, 15); // 少し長めに遅延
+  /**
+   * ウィジェットを置換箇所（u_inline1f）に重ね直す
+   * layoutContentWidget を呼ばないと Monaco は位置とキャッシュ済みのサイズを再取得しない
+   */
+  private layoutWidget(): void {
+    const range = this.getPlaceholderRange();
+    if (!this.widget || !range) return;
+    this.widget.update(range);
+    this.editor.layoutContentWidget(this.widget);
   }
 
   /**
@@ -213,7 +225,6 @@ export class InlineNudgeboxManager {
   private hideWidget(): void {
     if (this.widget) {
       this.editor.removeContentWidget(this.widget);
-      this.widget.dispose();
       this.widget = null;
     }
   }

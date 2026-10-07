@@ -4,13 +4,7 @@
 
 import * as monaco from 'monaco-editor';
 import { NudgeboxOptions } from './types';
-import {
-  calculateTextWidth,
-  calculatePositionAdjustment,
-  calculateZoomAdjustedSizes,
-  getDecimalPlaces,
-  UNIFORM_NAME
-} from './utils';
+import { getDecimalPlaces, UNIFORM_NAME } from './utils';
 
 /**
  * Monaco Editor で使用するインライン数値編集ウィジェット
@@ -20,19 +14,12 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
   private numberInput: HTMLInputElement;
   private position: monaco.editor.IContentWidgetPosition | null = null;
   private options: NudgeboxOptions;
-  private configChangeListener: monaco.IDisposable | null = null;
 
   constructor(options: NudgeboxOptions) {
     this.options = options;
     this.numberInput = document.createElement('input');
     this.domNode = this.createDomNode();
     this.setupEventListeners();
-    this.setupZoomChangeListener();
-
-    // DOM作成後に少し遅延させて確実にサイズ更新
-    setTimeout(() => {
-      this.updateSizeForCurrentZoom();
-    }, 5);
   }
 
   /**
@@ -197,93 +184,34 @@ export class NudgeboxWidget implements monaco.editor.IContentWidget {
   }
 
   /**
-   * ウィジェットの位置を設定
+   * プレースホルダー（u_inline1f）の範囲にぴったり重ねる位置とサイズを設定する
+   * 反映には呼び出し側で addContentWidget / layoutContentWidget が必要
    */
-  setPosition(range: monaco.IRange): void {
-    // Nudgeboxを元の数値の開始位置に配置
+  update(range: monaco.IRange): void {
+    // EXACT は行の上端・桁の左端に配置される。ABOVE/BELOW は画面端で上下が入れ替わるため使わない
     this.position = {
-      position: {
-        lineNumber: range.startLineNumber,
-        column: range.startColumn  // startColumn に変更（数値の先頭）
-      },
-      preference: [monaco.editor.ContentWidgetPositionPreference.ABOVE]
+      position: { lineNumber: range.startLineNumber, column: range.startColumn },
+      preference: [monaco.editor.ContentWidgetPositionPreference.EXACT]
     };
 
-    // 位置の微調整を行う
-    this.adjustPositionForTextCoverage(range);
+    const { editor, editorOption } = this.options;
+    const { fontSize, lineHeight } = editor.getOption(editorOption.fontInfo);
+
+    this.numberInput.style.fontSize = `${fontSize}px`;
+    this.numberInput.style.lineHeight = `${lineHeight}px`;
+    this.domNode.style.width = `${Math.ceil(this.measureRangeWidth(range))}px`;
+    this.domNode.style.height = `${lineHeight}px`;
   }
 
-  /**
-   * テキストを完全にカバーするための位置調整
-   */
-  private adjustPositionForTextCoverage(range: monaco.IRange): void {
-    if (!this.options.editor) return;
-
-    // 少し遅延させて DOM が配置された後に調整
-    setTimeout(() => {
-      const adjustment = calculatePositionAdjustment(this.options.editor!);
-      this.domNode.style.transform = `translateY(${adjustment.translateY}px)`;
-      this.domNode.style.zIndex = adjustment.zIndex.toString();
-
-      const fontSize = this.options.editor!.getOption(monaco.editor.EditorOption.fontSize);
-      console.log(`📍 Position adjusted: fontSize=${fontSize}, translateY=${adjustment.translateY}`);
-    }, 10);
-  }
-
-  /**
-   * ズーム変更監視をセットアップ
-   */
-  private setupZoomChangeListener(): void {
-    if (!this.options.editor) return;
-
-    this.configChangeListener = this.options.editor.onDidChangeConfiguration((e) => {
-      if (e.hasChanged(monaco.editor.EditorOption.fontSize)) {
-        this.updateSizeForCurrentZoom();
-      }
-    });
-  }
-
-  /**
-   * 現在のズームレベルに合わせてNudgeboxサイズを更新
-   */
-  public updateSizeForCurrentZoom(): void {
-    if (!this.options.editor) return;
-
-    const sizes = calculateZoomAdjustedSizes(this.options.editor, UNIFORM_NAME);
-
-    // Nudgeboxのフォントサイズをエディタに合わせる
-    this.numberInput.style.fontSize = `${sizes.fontSize}px`;
-    this.numberInput.style.lineHeight = `${sizes.lineHeight}px`;
-
-    this.domNode.style.width = `${sizes.width}px`;
-    this.domNode.style.height = `${sizes.height}px`;
-
-    // 位置もズームに合わせて調整
-    const adjustment = calculatePositionAdjustment(this.options.editor);
-    this.domNode.style.transform = `translateY(${adjustment.translateY}px)`;
-
-    // 位置の再評価（未フォーマットで行幅が変わったケースに備える）
-    try {
-      if (this.position && this.options.range) {
-        this.setPosition(this.options.range);
-      }
-    } catch {}
-
-    // メインボックスのサイズも調整
-    const mainBox = this.domNode.querySelector('.inline-nudgebox-main') as HTMLElement;
-    if (mainBox) {
-      mainBox.style.height = `${sizes.height}px`;
-      mainBox.style.padding = `${sizes.padding}px`;
+  private measureRangeWidth(range: monaco.IRange): number {
+    const { editor, editorOption } = this.options;
+    const start = editor.getOffsetForColumn(range.startLineNumber, range.startColumn);
+    const end = editor.getOffsetForColumn(range.endLineNumber, range.endColumn);
+    if (start >= 0 && end > start) {
+      return end - start;
     }
-  }
-
-  /**
-   * リソース清理
-   */
-  dispose(): void {
-    if (this.configChangeListener) {
-      this.configChangeListener.dispose();
-      this.configChangeListener = null;
-    }
+    // 行が描画されていないと実測できないので、エディタのフォント情報から概算する
+    const { typicalHalfwidthCharacterWidth } = editor.getOption(editorOption.fontInfo);
+    return typicalHalfwidthCharacterWidth * UNIFORM_NAME.length;
   }
 }
