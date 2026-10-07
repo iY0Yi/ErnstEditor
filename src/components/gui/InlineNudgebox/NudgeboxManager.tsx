@@ -35,7 +35,6 @@ interface SaveTarget {
  */
 export class InlineNudgeboxManager {
   private editor!: monaco.editor.IStandaloneCodeEditor; // ! で初期化遅延を明示
-  private editorOption!: typeof monaco.editor.EditorOption;
   private widget: NudgeboxWidget | null = null;
   private session: NudgeSession | null = null;
   private updateTabCallback: (tabId: string, updates: Partial<FileTab>) => void;
@@ -49,12 +48,9 @@ export class InlineNudgeboxManager {
 
   /**
    * Monaco Editor と統合
-   * エディタは @monaco-editor/react が読み込む Monaco で作られ、import している monaco-editor とは版が違う。
-   * EditorOption の番号は版ごとにずれるので、エディタを作った側の Monaco（runtimeMonaco）の値を使う
    */
-  public integrate(editor: monaco.editor.IStandaloneCodeEditor, runtimeMonaco: typeof monaco): void {
+  public integrate(editor: monaco.editor.IStandaloneCodeEditor): void {
     this.editor = editor;
-    this.editorOption = runtimeMonaco.editor.EditorOption;
     this.setupKeyBindings();
 
     this.listeners.forEach(l => l.dispose());
@@ -62,7 +58,7 @@ export class InlineNudgeboxManager {
       // レイアウト・ズーム・置換箇所より前の編集で、置換箇所に重ねた位置とサイズがずれないよう追従する
       this.editor.onDidLayoutChange(() => this.layoutWidget()),
       this.editor.onDidChangeConfiguration((e) => {
-        if (e.hasChanged(this.editorOption.fontInfo)) {
+        if (e.hasChanged(monaco.editor.EditorOption.fontInfo)) {
           this.layoutWidget();
         }
       }),
@@ -140,8 +136,7 @@ export class InlineNudgeboxManager {
       onConfirm: (value) => this.finish({ confirmed: true, value }),
       onCancel: () => this.finish({ confirmed: false }),
       onValueChange: (value) => this.sendValueToBlenderInternal(value),
-      editor: this.editor,
-      editorOption: this.editorOption
+      editor: this.editor
     });
 
     const placeholderRange = this.getPlaceholderRange();

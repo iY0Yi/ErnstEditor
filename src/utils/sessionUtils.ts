@@ -3,6 +3,7 @@
  * アプリケーションの状態とセッションデータの相互変換を担当
  */
 
+import * as monaco from 'monaco-editor';
 import { FileTab } from '../types';
 import { SessionData, TabInfo } from '../types/session';
 
@@ -40,13 +41,13 @@ export function createSessionFromTabs(
       let fontSize: any = undefined;
       try {
         if (editor.getOption) {
-          fontSize = editor.getOption((window as any).monaco.editor.EditorOption.fontSize);
+          fontSize = editor.getOption(monaco.editor.EditorOption.fontSize);
         }
       } catch {}
       if (fontSize == null) {
         try {
           const opts = editor.getOptions?.();
-          fontSize = opts?.get?.((window as any).monaco.editor.EditorOption.fontSize) ?? opts?.fontSize;
+          fontSize = opts?.get?.(monaco.editor.EditorOption.fontSize) ?? opts?.fontSize;
         } catch {}
       }
       if (typeof fontSize === 'number') editorFontSize = fontSize;
