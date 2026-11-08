@@ -210,6 +210,8 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
           // 文字列内（"...") でも補完を出す
           quickSuggestions: { other: true, comments: false, strings: true },
           suggestOnTriggerCharacters: true,
+          // 同じ接頭辞で前回選んだ候補を先頭にする (bUni → 前回の bUniS など)
+          suggestSelection: 'recentlyUsedByPrefix',
           minimap: {
             enabled: true,
             side: 'right',
