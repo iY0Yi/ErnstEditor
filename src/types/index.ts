@@ -66,12 +66,22 @@ export interface ElectronAPI {
 
   // Save notification (renderer → main)
   notifyFileSaved: (filePath: string) => void;
+
+  listDir: (dirPath: string) => Promise<DirEntry[]>;
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
 }
 
 // グローバル型定義
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
+    __ERNST_BUFFER_TABS__?: FileTab[];
+    __ERNST_PROJECT_ROOT__?: string | null;
   }
 }
 
