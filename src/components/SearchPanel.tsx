@@ -1,17 +1,7 @@
 import React from 'react';
 import { MaterialIcon } from './icons/MaterialIcons';
-
-interface SearchResult {
-  filePath: string;
-  fileName: string;
-  line: number;
-  column: number;
-  lineText: string;
-  beforeText: string;
-  afterText: string;
-  matchStart: number;
-  matchEnd: number;
-}
+import { electronClient } from '../services/electronClient';
+import type { SearchResult } from '../types';
 
 interface SearchPanelProps {
   onSearchResult: (filePath: string, line: number, column: number) => void;
@@ -42,18 +32,15 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onSearchResult, projectRoot }
     setIsSearching(true);
     try {
       // Electron APIを使用してファイル検索（プロジェクトルートを指定）
-      const { electronClient } = require('../services/electronClient');
-      if (electronClient) {
-        const searchResults = await electronClient.searchInFiles(term, projectRoot);
-        setResults(searchResults || []);
+      const searchResults = await electronClient.searchInFiles(term, projectRoot);
+      setResults(searchResults);
 
-        // 統計情報を計算
-        const uniqueFiles = new Set(searchResults?.map(r => r.filePath) || []);
-        setSearchStats({
-          matches: searchResults?.length || 0,
-          files: uniqueFiles.size
-        });
-      }
+      // 統計情報を計算
+      const uniqueFiles = new Set(searchResults.map(r => r.filePath));
+      setSearchStats({
+        matches: searchResults.length,
+        files: uniqueFiles.size
+      });
     } catch (error) {
       console.error('Search error:', error);
       setResults([]);

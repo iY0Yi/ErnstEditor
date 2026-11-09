@@ -1,6 +1,5 @@
 import { FloatMarker, SliderPosition, InlineFloatEvents } from './types';
 import * as monaco from 'monaco-editor';
-import { blenderService } from '../../services/blenderService';
 
 /**
  * Monaco Editor Content Widget として実装されたインラインスライダー
@@ -8,11 +7,11 @@ import { blenderService } from '../../services/blenderService';
 export class SliderUI implements monaco.editor.IContentWidget {
   private editor: monaco.editor.ICodeEditor;
   private container: HTMLElement;
-  private slider: HTMLInputElement;
-  private sliderCell: HTMLElement;
-  private track: HTMLElement;
-  private knob: HTMLElement;
-  private numberInput: HTMLInputElement;
+  private slider!: HTMLInputElement;
+  private sliderCell!: HTMLElement;
+  private track!: HTMLElement;
+  private knob!: HTMLElement;
+  private numberInput!: HTMLInputElement;
   private currentMarker: FloatMarker | null = null;
   private events: InlineFloatEvents;
   private isVisible: boolean = false;
@@ -479,13 +478,6 @@ export class SliderUI implements monaco.editor.IContentWidget {
    */
   getCurrentMarker(): FloatMarker | null {
     return this.currentMarker;
-  }
-
-  /**
-   * DOM要素を取得
-   */
-  getDomNode(): HTMLElement {
-    return this.container;
   }
 
   /**

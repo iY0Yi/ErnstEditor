@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
+import type { IpcRendererEvent } from 'electron';
 import { IPC } from './constants/ipc';
 import type { VSCodeTheme } from './types/theme';
+
+type CliOpenPayload = { filePath: string; content: string; fileName: string; trackPath?: string | null; projectName?: string | null };
 
 interface ElectronAPI {
   // 既存のファイル操作API
@@ -28,7 +31,7 @@ interface ElectronAPI {
   searchInFiles: (searchTerm: string, projectRoot?: string) => Promise<any[]>;
 
   // コマンドライン引数からのファイル開き用API
-  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string; trackPath?: string | null }) => void) => void;
+  onFileOpenFromCLI: (callback: (data: CliOpenPayload) => void) => void;
   removeFileOpenFromCLIListener: () => void;
 
   // Blenderサーバー制御用API
@@ -83,8 +86,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   searchInFiles: (searchTerm: string, projectRoot?: string) => ipcRenderer.invoke(IPC.SEARCH_FILES, searchTerm, projectRoot),
 
   // コマンドライン引数からのファイル開き用API
-  onFileOpenFromCLI: (callback: (data: { filePath: string; content: string; fileName: string }) => void) => {
-    ipcRenderer.on(IPC.FILE_OPEN_FROM_CLI, (event, data) => callback(data));
+  onFileOpenFromCLI: (callback: (data: CliOpenPayload) => void) => {
+    ipcRenderer.on(IPC.FILE_OPEN_FROM_CLI, (_event: IpcRendererEvent, data: CliOpenPayload) => callback(data));
   },
   removeFileOpenFromCLIListener: () => {
     ipcRenderer.removeAllListeners(IPC.FILE_OPEN_FROM_CLI);
@@ -97,7 +100,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Blender接続状態API
   getBlenderConnectionStatus: () => ipcRenderer.invoke(IPC.BLENDER_GET_CONNECTION_STATUS),
   onBlenderConnectionChange: (callback: (connected: boolean) => void) => {
-    ipcRenderer.on(IPC.BLENDER_CONNECTION_CHANGED, (event, connected) => callback(connected));
+    ipcRenderer.on(IPC.BLENDER_CONNECTION_CHANGED, (_event: IpcRendererEvent, connected: boolean) => callback(connected));
   },
   removeBlenderConnectionListener: () => {
     ipcRenderer.removeAllListeners(IPC.BLENDER_CONNECTION_CHANGED);
@@ -113,7 +116,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // App actions (main → renderer)
   onAppAction: (callback: (action: { type: string; payload?: any }) => void) => {
-    ipcRenderer.on(IPC.APP_ACTION, (_event, action) => callback(action));
+    ipcRenderer.on(IPC.APP_ACTION, (_event: IpcRendererEvent, action: { type: string; payload?: any }) => callback(action));
   },
   removeAppActionListener: () => {
     ipcRenderer.removeAllListeners(IPC.APP_ACTION);

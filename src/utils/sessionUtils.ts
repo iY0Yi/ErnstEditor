@@ -22,7 +22,7 @@ export function createSessionFromTabs(
   projectName: string
 ): SessionData {
   const openTabs: TabInfo[] = tabs
-    .filter(tab => tab.filePath) // ファイルパスがあるタブのみ（新規ファイルは除外）
+    .filter((tab): tab is FileTab & { filePath: string } => !!tab.filePath) // ファイルパスがあるタブのみ（新規ファイルは除外）
     .map(tab => ({
       filePath: tab.filePath,
       isActive: tab.id === activeTabId,

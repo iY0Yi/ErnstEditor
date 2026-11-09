@@ -81,7 +81,7 @@ export async function loadSession(trackPath: string): Promise<SessionResult> {
     // ファイルが存在しない場合は成功扱い（空セッション）
     if (!fs.existsSync(sessionFilePath)) {
       console.log('📄 No session file found, starting fresh');
-      return { success: true, data: null };
+      return { success: true };
     }
 
     // JSONファイルを読み込み
