@@ -212,6 +212,8 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
           suggestOnTriggerCharacters: true,
           // 同じ接頭辞で前回選んだ候補を先頭にする (bUni → 前回の bUniS など)
           suggestSelection: 'recentlyUsedByPrefix',
+          // 定義が複数あると peek になるが、standalone では開いていないファイルのモデルを引けず失敗する
+          gotoLocation: { multipleDefinitions: 'goto' },
           minimap: {
             enabled: true,
             side: 'right',

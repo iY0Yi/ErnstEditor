@@ -101,6 +101,8 @@ const glslLanguageConfiguration: monaco.languages.LanguageConfiguration = {
     lineComment: '//',
     blockComment: ['/*', '*/']
   },
+  // uber_scripts のプレースホルダ ($cp) を 1 語として扱う。$ だけでも語にして、打った直後の補完の range を $ から取る
+  wordPattern: /(-?\d*\.\d\w*)|(\$?[^`~!@#$%^&*()\-=+[{\]}\\|;:'",.<>/?\s]+)|\$/g,
   brackets: [
     ['{', '}'],
     ['[', ']'],

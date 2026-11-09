@@ -6,6 +6,11 @@ export function normalizeSlashes(p: string): string {
   return p.replace(/\\/g, '/');
 }
 
+/** 'C:/foo/bar' → 'C:\foo\bar'。タブの filePath は Electron のダイアログ由来で \ 区切りなので揃える */
+export function toNativePath(p: string): string {
+  return /^[A-Za-z]:\//.test(p) ? p.replace(/\//g, '\\') : p;
+}
+
 function isAbsolute(p: string): boolean {
   return p.startsWith('/') || /^[A-Za-z]:\//.test(p);
 }

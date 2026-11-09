@@ -3,7 +3,7 @@ import { BUILTIN_FUNCTIONS, BUILTIN_TYPES, KEYWORDS, vectorInfo } from './builti
 import { BUILTIN_SIGNATURES, BuiltinFunction, DEPRECATED_BUILTINS } from './builtinSignatures';
 import { ExpectedTypeEnv, findOpenCall, inferExpectedTypes } from './expectedType';
 import { provideIncludePathCompletions } from './includePaths';
-import { basename, dirname, isUnder, pathKey, relativePath } from './paths';
+import { basename, dirname, isUnder, pathKey, relativePath, toNativePath } from './paths';
 import {
   collectIdentifiers,
   collectLocalDeclarations,
@@ -20,8 +20,10 @@ import {
   buildContext,
   filePathOfModel,
   getLibModules,
+  GLSL_FILE_RE,
   GlslContext,
   LibModule,
+  openTabs,
   parseCached
 } from './workspaceIndex';
 import { bestFit } from './typeSystem';
@@ -73,7 +75,7 @@ interface SymbolTable {
   functions: Map<string, Located<GlslFunction>[]>;
   macros: Map<string, Located<GlslMacro>>;
   structs: Map<string, Located<GlslStruct>>;
-  variables: Map<string, { type: string; path: string | null }>;
+  variables: Map<string, { type: string; path: string | null; line: number }>;
 }
 
 const modelParseCache = new WeakMap<Model, { version: number; parsed: ParsedGlsl }>();
@@ -103,7 +105,7 @@ function buildSymbolTable(doc: ParsedGlsl, ctx: GlslContext): SymbolTable {
     for (const fn of parsed.functions) pushTo(table.functions, fn.name, { symbol: fn, path });
     for (const m of parsed.macros) if (!table.macros.has(m.name)) table.macros.set(m.name, { symbol: m, path });
     for (const s of parsed.structs) if (!table.structs.has(s.name)) table.structs.set(s.name, { symbol: s, path });
-    for (const v of parsed.variables) if (!table.variables.has(v.name)) table.variables.set(v.name, { type: v.type, path });
+    for (const v of parsed.variables) if (!table.variables.has(v.name)) table.variables.set(v.name, { type: v.type, path, line: v.line });
   }
   return table;
 }
@@ -197,12 +199,10 @@ async function provideCompletions(
   const variableType = (name: string): string | undefined =>
     placeholders.get(name)?.type ?? locals.get(name) ?? table.variables.get(name)?.type;
 
-  // Monaco の単語は $ を含まないので、$ の直後なら range を $ の位置から取り、$ ごと置き換える
-  const dollar = /\$\w*$/.exec(lineToCursor)?.[0];
+  // wordPattern で $cp を 1 語にしているので、$ の直後なら range は $ から始まる
   const word = model.getWordUntilPosition(position);
-  const range = dollar
-    ? new monaco.Range(position.lineNumber, position.column - dollar.length, position.lineNumber, position.column)
-    : new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+  const dollar = word.word.startsWith('$');
+  const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
 
   const member = /(\$?[A-Za-z_]\w*)\s*\.\s*\w*$/.exec(lineToCursor);
   if (member) {
@@ -432,16 +432,14 @@ async function lookupFunction(model: Model, name: string): Promise<{ fn: Functio
 async function provideHover(monaco: MonacoApi, model: Model, position: Monaco.Position): Promise<Monaco.languages.Hover | null> {
   const word = model.getWordAtPosition(position);
   if (!word) return null;
-  const before = model.getLineContent(position.lineNumber).slice(0, word.startColumn - 1);
-  if (before.endsWith('$')) {
-    // $cp の cp で同名の関数や変数を引かないよう、見つからなくても先へ進めない
-    const p = (await placeholdersOf(filePathOfModel(model))).get(`$${word.word}`);
+  const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+  if (word.word.startsWith('$')) {
+    const p = (await placeholdersOf(filePathOfModel(model))).get(word.word);
     if (!p) return null;
-    const range = new monaco.Range(position.lineNumber, word.startColumn - 1, position.lineNumber, word.endColumn);
     return { range, contents: [{ value: ['```glsl\n' + `${p.type} ${p.name}` + '\n```', p.desc, `*uber_scripts/${p.context} のプレースホルダ*`].join('\n\n') }] };
   }
+  const before = model.getLineContent(position.lineNumber).slice(0, word.startColumn - 1);
   if (/\.\s*$/.test(before)) return null;
-  const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
 
   const { fn, macro, table, ctx, doc } = await lookupFunction(model, word.word);
   if (fn) {
@@ -460,6 +458,52 @@ async function provideHover(monaco: MonacoApi, model: Model, position: Monaco.Po
   const locals = collectLocalDeclarations(doc.code, table.structs.keys());
   const type = locals.get(word.word) ?? table.variables.get(word.word)?.type;
   if (type) return { range, contents: [{ value: '```glsl\n' + `${type} ${word.word}` + '\n```' }] };
+  return null;
+}
+
+/** code はコメントとプリプロセッサ行を空白にしたものなので、マクロの名前は見つからず 1 列目になる */
+function definitionRange(monaco: MonacoApi, code: string, line: number, name: string): Monaco.IRange {
+  const index = new RegExp(`\\b${name}\\b`).exec(code.split('\n')[line - 1] ?? '')?.index;
+  if (index === undefined) return new monaco.Range(line, 1, line, 1);
+  return new monaco.Range(line, index + 1, line, index + 1 + name.length);
+}
+
+// 引く順は lookupFunction と同じ。組み込み関数と同名の lib 関数があっても、include していなければ組み込みを指している
+async function provideDefinition(monaco: MonacoApi, model: Model, position: Monaco.Position): Promise<Monaco.languages.Location[] | null> {
+  const word = model.getWordAtPosition(position);
+  // $cp のプレースホルダは ErnstRenderer が埋めるので、定義はどのファイルにも無い
+  if (!word || !/^[A-Za-z_]\w*$/.test(word.word)) return null;
+  const before = model.getLineContent(position.lineNumber).slice(0, word.startColumn - 1);
+  if (/\.\s*$/.test(before)) return null;
+  const name = word.word;
+
+  const doc = parseModel(model);
+  const ctx = await buildContext(filePathOfModel(model), doc);
+  const table = buildSymbolTable(doc, ctx);
+  const codeOf = new Map(ctx.files.map(f => [f.path, f.parsed.code]));
+  const at = (path: string | null, line: number): Monaco.languages.Location => ({
+    uri: path === null ? model.uri : monaco.Uri.file(path),
+    range: definitionRange(monaco, (path === null ? doc.code : codeOf.get(path)) ?? '', line, name)
+  });
+
+  const fns = table.functions.get(name);
+  if (fns) return fns.map(f => at(f.path, f.symbol.line));
+  const macro = table.macros.get(name);
+  if (macro) return [at(macro.path, macro.symbol.line)];
+  const struct = table.structs.get(name);
+  if (struct) return [at(struct.path, struct.symbol.line)];
+  const variable = table.variables.get(name);
+  if (variable) return [at(variable.path, variable.line)];
+  if (BUILTIN_SIGNATURES.has(name) || !ctx.trackRoot) return null;
+
+  const libs = await getLibModules(ctx.trackRoot);
+  for (const lib of libs) codeOf.set(lib.path, lib.parsed.code);
+  const libFns = libs.flatMap(lib => lib.parsed.functions.filter(f => f.name === name).map(f => at(lib.path, f.line)));
+  if (libFns.length > 0) return libFns;
+  for (const lib of libs) {
+    const m = lib.parsed.macros.find(x => x.name === name);
+    if (m) return [at(lib.path, m.line)];
+  }
   return null;
 }
 
@@ -525,4 +569,32 @@ export function registerGlslLanguageFeatures(monaco: MonacoApi): void {
     triggerCharacters: ['/', '.', '"', '-', '_', ...INCLUDE_PATH_WORD_TRIGGERS],
     provideCompletionItems: (model, position) => provideIncludePathCompletions(monaco, model, position)
   });
+  monaco.languages.registerDefinitionProvider('glsl', {
+    provideDefinition: (model, position) => provideDefinition(monaco, model, position)
+  });
+  // standalone の Monaco は表示中のモデルにしか移れないので、別ファイルの定義はタブを開いてから移る
+  monaco.editor.registerEditorOpener({
+    openCodeEditor: (_source, resource, selectionOrPosition) => openDefinitionFile(monaco, resource, selectionOrPosition)
+  });
+}
+
+function openDefinitionFile(monaco: MonacoApi, resource: Monaco.Uri, selectionOrPosition: Monaco.IRange | Monaco.IPosition | undefined): boolean {
+  // 既存のモデル (未保存タブの file:///model-xxx を含む) は Monaco に任せる。
+  // コメント中の file:/// リンクを Ctrl+クリックしても来るので、GLSL のファイルだけ受け取る
+  if (resource.scheme !== 'file' || monaco.editor.getModel(resource) || !GLSL_FILE_RE.test(resource.path)) return false;
+  const open = window.__ERNST_OPEN_FILE_AT__;
+  if (!open) return false;
+  // fsPath はドライブ文字を小文字にするので path から作る
+  const path = toNativePath(resource.path.replace(/^\/(?=[A-Za-z]:)/, ''));
+  // handleSearchResult は filePath の完全一致で既存タブを探すので、開いているならそのタブの表記で渡す
+  const target = openTabs().find(t => t.filePath && pathKey(t.filePath) === pathKey(path))?.filePath ?? path;
+  const [line, column] = !selectionOrPosition
+    ? [1, 1]
+    : 'startLineNumber' in selectionOrPosition
+      ? [selectionOrPosition.startLineNumber, selectionOrPosition.startColumn]
+      : [selectionOrPosition.lineNumber, selectionOrPosition.column];
+  open(target, line, column).catch((error: unknown) => {
+    console.error('[glsl] 定義のファイルを開けませんでした', target, error);
+  });
+  return true;
 }

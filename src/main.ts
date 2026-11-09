@@ -164,8 +164,13 @@ const createWindow = (): void => {
 
   // フォーカス時限定のキーハンドリング
   mainWindow.webContents.on('before-input-event', (event, input) => {
-    // DevTools
-    if (input.key === 'F12') {
+    // keyUp でも呼ばれるので、修飾キーを押したまま離すと同じ操作が 2 回走る (DevTools が閉じてすぐ開くなど)
+    if (input.type !== 'keyDown') return;
+    const isAccel = process.platform === 'darwin' ? input.meta : input.control;
+    if (!isAccel) return;
+
+    // DevTools。F12 はエディタの定義ジャンプに使うので、Chromium の Ctrl+Shift+I にしている
+    if (input.shift && !input.alt && input.key?.toUpperCase() === 'I') {
       if (mainWindow?.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools();
       } else {
@@ -174,9 +179,6 @@ const createWindow = (): void => {
       event.preventDefault();
       return;
     }
-
-    const isAccel = process.platform === 'darwin' ? input.meta : input.control;
-    if (!isAccel) return;
 
     // Quit
     if (!input.shift && !input.alt && input.key?.toUpperCase() === 'Q') {

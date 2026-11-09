@@ -82,6 +82,8 @@ declare global {
     electronAPI: ElectronAPI;
     __ERNST_BUFFER_TABS__?: FileTab[];
     __ERNST_PROJECT_ROOT__?: string | null;
+    /** ファイルをタブで開き (開いていれば切り替え)、指定の位置へ移る */
+    __ERNST_OPEN_FILE_AT__?: (filePath: string, line: number, column: number) => Promise<void>;
   }
 }
 

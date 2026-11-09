@@ -339,6 +339,11 @@ const App: React.FC = () => {
     editorAPI
   });
 
+  // GLSL の定義ジャンプ (F12) で別ファイルへ移るときに使う
+  React.useEffect(() => {
+    window.__ERNST_OPEN_FILE_AT__ = handleSearchResult;
+  }, [handleSearchResult]);
+
   // ファイル操作（統合されたBufferManager使用）
   const handleOpenFile = React.useCallback(async (): Promise<void> => {
     const { electronClient } = require('../services/electronClient');
