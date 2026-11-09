@@ -9,7 +9,7 @@ import { DirEntry, FileTab } from '../../../types';
 import { basename, collapsePath, dirname, isUnder, joinPath, pathKey } from './paths';
 import { parseGlsl, ParsedGlsl } from './symbols';
 
-const GLSL_FILE_RE = /\.(glsl|glslinc|vert|frag|vs|fs|geom|comp|tesc|tese|vertex|fragment|shader)$/i;
+export const GLSL_FILE_RE = /\.(glsl|glslinc|vert|frag|vs|fs|geom|comp|tesc|tese|vertex|fragment|shader)$/i;
 // ディスク上のファイルは保存で変わる。開いているタブはモデルから直接読むので短めでよい
 const DISK_TTL_MS = 2000;
 const LIB_TTL_MS = 30000;

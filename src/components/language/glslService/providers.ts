@@ -2,6 +2,7 @@ import type * as Monaco from 'monaco-editor';
 import { BUILTIN_FUNCTIONS, BUILTIN_TYPES, KEYWORDS, vectorInfo } from './builtins';
 import { BUILTIN_SIGNATURES, BuiltinFunction, DEPRECATED_BUILTINS } from './builtinSignatures';
 import { ExpectedTypeEnv, findOpenCall, inferExpectedTypes } from './expectedType';
+import { provideIncludePathCompletions } from './includePaths';
 import { basename, dirname, isUnder, pathKey, relativePath } from './paths';
 import {
   collectIdentifiers,
@@ -24,6 +25,7 @@ import {
   parseCached
 } from './workspaceIndex';
 import { bestFit } from './typeSystem';
+import { providePlaceholderCompletions } from './uberPlaceholders';
 
 type MonacoApi = typeof Monaco;
 type Model = Monaco.editor.ITextModel;
@@ -469,6 +471,8 @@ async function provideSignatureHelp(monaco: MonacoApi, model: Model, position: M
   };
 }
 
+const INCLUDE_PATH_WORD_TRIGGERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
+
 let registered = false;
 
 export function registerGlslLanguageFeatures(monaco: MonacoApi): void {
@@ -487,5 +491,13 @@ export function registerGlslLanguageFeatures(monaco: MonacoApi): void {
     signatureHelpTriggerCharacters: ['(', ','],
     signatureHelpRetriggerCharacters: [')'],
     provideSignatureHelp: (model, position) => provideSignatureHelp(monaco, model, position)
+  });
+  monaco.languages.registerCompletionItemProvider('glsl', {
+    triggerCharacters: ['/', '.', '"', '-', '_', ...INCLUDE_PATH_WORD_TRIGGERS],
+    provideCompletionItems: (model, position) => provideIncludePathCompletions(monaco, model, position)
+  });
+  monaco.languages.registerCompletionItemProvider('glsl', {
+    triggerCharacters: ['$'],
+    provideCompletionItems: (model, position) => providePlaceholderCompletions(monaco, model, position)
   });
 }
