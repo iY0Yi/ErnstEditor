@@ -3,7 +3,7 @@
 import type * as Monaco from 'monaco-editor';
 import { electronClient } from '../../../services/electronClient';
 import { dirname, joinPath } from './paths';
-import { filePathOfModel, GLSL_FILE_RE } from './workspaceIndex';
+import { filePathOfModel, findTrackRoot, GLSL_FILE_RE, includeBaseDir } from './workspaceIndex';
 
 type MonacoApi = typeof Monaco;
 
@@ -18,7 +18,7 @@ export async function provideIncludePathCompletions(
   if (prefix === undefined) return { suggestions: [] };
 
   const docPath = filePathOfModel(model);
-  const baseDir = docPath ? dirname(docPath) : window.__ERNST_PROJECT_ROOT__;
+  const baseDir = docPath ? includeBaseDir(docPath, await findTrackRoot(dirname(docPath))) : window.__ERNST_PROJECT_ROOT__;
   if (!baseDir) return { suggestions: [] };
 
   const slash = prefix.lastIndexOf('/');

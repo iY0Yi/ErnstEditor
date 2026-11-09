@@ -24,6 +24,7 @@ import {
   getLibModules,
   GLSL_FILE_RE,
   GlslContext,
+  includeBaseDir,
   LibModule,
   openTabs,
   parseCached
@@ -130,8 +131,8 @@ function functionDoc(overloads: GlslFunction[], where: string, note?: string): M
 }
 
 /** 既存の #include の直後 (無ければ #version などの後、それも無ければ先頭) に足す */
-function includeEdit(monaco: MonacoApi, model: Model, doc: ParsedGlsl, docPath: string, target: string): Monaco.languages.TextEdit {
-  const rel = relativePath(dirname(docPath), target);
+function includeEdit(monaco: MonacoApi, model: Model, doc: ParsedGlsl, baseDir: string, target: string): Monaco.languages.TextEdit {
+  const rel = relativePath(baseDir, target);
   const quoted = doc.includes.length === 0 || doc.includes[0].quoted;
   const text = `#include ${quoted ? `"${rel}"` : rel}`;
   let afterLine = doc.includes.length > 0 ? Math.max(...doc.includes.map(i => i.line)) : 0;
@@ -367,9 +368,10 @@ async function provideCompletions(
 
   if (ctx.trackRoot) {
     const blocked = autoIncludeBlockedReason(docPath, ctx.trackRoot);
+    const includeBase = docPath ? includeBaseDir(docPath, ctx.trackRoot) : null;
     for (const lib of libs) {
       if (ctx.reachableKeys.has(pathKey(lib.path))) continue;
-      for (const item of libCompletions(monaco, model, doc, docPath, lib, blocked, range, rank)) {
+      for (const item of libCompletions(monaco, model, doc, includeBase, lib, blocked, range, rank)) {
         if (!items.has(item.insertText)) add(`lib:${lib.relPath}:${item.insertText}`, item);
       }
     }
@@ -387,7 +389,7 @@ function libCompletions(
   monaco: MonacoApi,
   model: Model,
   doc: ParsedGlsl,
-  docPath: string | null,
+  includeBase: string | null,
   lib: LibModule,
   blocked: string | null,
   range: Monaco.IRange,
@@ -395,7 +397,7 @@ function libCompletions(
 ): Monaco.languages.CompletionItem[] {
   const Kind = monaco.languages.CompletionItemKind;
   const where = `lib_modules/${lib.relPath}`;
-  const edits = !blocked && docPath ? [includeEdit(monaco, model, doc, docPath, lib.path)] : undefined;
+  const edits = !blocked && includeBase ? [includeEdit(monaco, model, doc, includeBase, lib.path)] : undefined;
   const note = edits ? '確定すると include を追加します' : `未 include: ${blocked ?? ''}`;
   const byName = new Map<string, GlslFunction[]>();
   for (const fn of lib.parsed.functions) pushTo(byName, fn.name, fn);

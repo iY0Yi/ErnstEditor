@@ -80,14 +80,20 @@ function listDir(dir: string): Promise<DirEntry[]> {
   return electronClient.listDir(dir);
 }
 
-const trackRootCache = new Map<string, Promise<string | null>>();
+// bl_modules はシェーダを生成するまで無く、listDir は失敗すると黙って [] を返すので、見つからなかった結果は時間で捨てる
+const NOT_FOUND_TTL_MS = 10000;
+interface TrackRootEntry {
+  root: Promise<string | null>;
+  notFoundAt: number | null;
+}
+const trackRootCache = new Map<string, TrackRootEntry>();
 
 /** lib_modules と bl_modules を両方持つ祖先ディレクトリを track ルートとみなす */
 export function findTrackRoot(startDir: string): Promise<string | null> {
   const key = pathKey(startDir);
   const cached = trackRootCache.get(key);
-  if (cached) return cached;
-  const found = (async () => {
+  if (cached && (cached.notFoundAt === null || Date.now() - cached.notFoundAt < NOT_FOUND_TTL_MS)) return cached.root;
+  const root = (async () => {
     let dir = collapsePath(startDir);
     for (let i = 0; i < MAX_ROOT_SEARCH_DEPTH; i++) {
       const dirs = new Set((await listDir(dir)).filter(e => e.type === 'directory').map(e => e.name));
@@ -98,8 +104,14 @@ export function findTrackRoot(startDir: string): Promise<string | null> {
     }
     return null;
   })();
-  trackRootCache.set(key, found);
-  return found;
+  const entry: TrackRootEntry = { root, notFoundAt: null };
+  trackRootCache.set(key, entry);
+  // 失敗は呼び出し元が root から受け取る。ここではキャッシュに残さないことだけを扱う
+  root.then(
+    found => { if (found === null) entry.notFoundAt = Date.now(); },
+    () => { if (trackRootCache.get(key) === entry) trackRootCache.delete(key); }
+  );
+  return root;
 }
 
 async function walkLibDir(dir: string, rel: string, depth: number): Promise<LibModule[]> {
@@ -180,13 +192,25 @@ export async function buildContext(docPath: string | null, docParsed: ParsedGlsl
     for (const inc of src.parsed.includes) await visit(joinPath(dirname(target), inc.path), depth + 1);
   };
 
-  if (docPath) {
-    for (const inc of docParsed.includes) await visit(joinPath(dirname(docPath), inc.path), 1);
-  }
   const trackRoot = await resolveTrackRoot(docPath);
+  if (docPath) {
+    const base = includeBaseDir(docPath, trackRoot);
+    for (const inc of docParsed.includes) await visit(joinPath(base, inc.path), 1);
+  }
   if (trackRoot) await visit(joinPath(trackRoot, 'bl_modules/bl_inc_common.glslinc'), 1);
 
   return { docPath, trackRoot, files, reachableKeys };
+}
+
+// boolean の本体はトップレベルのまま bl_modules/bl_inc_sdf.glslinc に連結される
+function isBooleanScript(docPath: string, trackRoot: string): boolean {
+  return isUnder(docPath, joinPath(trackRoot, 'uber_scripts/boolean')) && !basename(docPath).startsWith('inc_');
+}
+
+/** docPath に書いた #include を解決する基準。ErnstRenderer は #include を書いたファイルの位置を基準にする */
+export function includeBaseDir(docPath: string, trackRoot: string | null): string {
+  if (trackRoot && isBooleanScript(docPath, trackRoot)) return joinPath(trackRoot, 'bl_modules');
+  return dirname(docPath);
 }
 
 /** 自動 include してはいけないファイルなら理由を返す */
@@ -194,9 +218,10 @@ export function autoIncludeBlockedReason(docPath: string | null, trackRoot: stri
   if (!docPath) return '未保存のファイルには include を自動で足しません';
   if (!trackRoot) return null;
   // uber_scripts の本体 (prim_*.frag など) は関数の中に埋め込まれるので、#include を書くとコンパイルが通らない。
+  // boolean の本体はトップレベルに連結されるので、bl_modules 基準で足してよい。
   // inc_*.glsl は #include で読み込まれ、自分の位置を基準に解決されるので自動で足してよい。
   // ErnstRenderer 側に区別の仕組みは無く、inc_ という命名の慣習で見分けている
-  if (isUnder(docPath, joinPath(trackRoot, 'uber_scripts')) && !basename(docPath).startsWith('inc_')) {
+  if (isUnder(docPath, joinPath(trackRoot, 'uber_scripts')) && !basename(docPath).startsWith('inc_') && !isBooleanScript(docPath, trackRoot)) {
     return 'uber スクリプトの本体は関数の中に埋め込まれるため、include は自動で足しません (inc_ で始まるファイルでは足します)';
   }
   if (isUnder(docPath, joinPath(trackRoot, 'bl_modules'))) {
