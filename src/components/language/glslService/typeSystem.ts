@@ -73,10 +73,14 @@ export function bestFit(candidateTypes: string[], expectedTypes: string[]): Fit 
   return best;
 }
 
-/** vec3 の .xy → vec2、.x → float */
+const SWIZZLE_SETS = ['xyzw', 'rgba', 'stpq'];
+
+/** vec3 の .xy → vec2、.x → float。.xw や .foo のように vec3 に無い成分なら null */
 export function swizzleType(type: string, swizzle: string): string | null {
   const shape = scalarShape(type);
-  if (!shape || shape.size === 1 || swizzle.length > 4) return null;
+  if (!shape || shape.size === 1 || swizzle.length === 0 || swizzle.length > 4) return null;
+  const set = SWIZZLE_SETS.find(s => s.includes(swizzle[0]));
+  if (!set || [...swizzle].some(c => { const i = set.indexOf(c); return i < 0 || i >= shape.size; })) return null;
   if (swizzle.length === 1) return shape.base;
   const prefix = Object.entries(SCALAR_BY_PREFIX).find(([, base]) => base === shape.base)?.[0] ?? '';
   return `${prefix}vec${swizzle.length}`;

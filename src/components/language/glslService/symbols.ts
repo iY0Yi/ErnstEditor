@@ -8,6 +8,8 @@ export interface GlslFunction {
   returnType: string;
   params: string[];
   line: number;
+  /** 本体の閉じ括弧の行。前方宣言は null */
+  endLine: number | null;
   doc: string;
 }
 
@@ -46,8 +48,20 @@ export interface ParsedGlsl {
   structs: GlslStruct[];
   variables: GlslVariable[];
   includes: GlslInclude[];
+  /**
+   * トップレベルの関数 (前方宣言と、functions では畳んだ同じシグネチャの本体も含む) と struct が占める行。
+   * スコープを切るのに使う
+   */
+  spans: GlslSpan[];
   /** コメントとプリプロセッサ行を空白にし、改行を LF に揃えたもの。行番号は元の文字列と一致する */
   code: string;
+}
+
+export interface GlslSpan {
+  start: number;
+  end: number;
+  /** 関数の本体ならその関数。前方宣言と struct は null */
+  body: GlslFunction | null;
 }
 
 const CONTROL_WORDS = new Set(['if', 'for', 'while', 'switch', 'return', 'else', 'do']);
@@ -194,10 +208,12 @@ export function parseGlsl(text: string): ParsedGlsl {
   const functions: GlslFunction[] = [];
   const structs: GlslStruct[] = [];
   const variables: GlslVariable[] = [];
+  const spans: GlslSpan[] = [];
   let depth = 0;
   let parenDepth = 0;
   let chunkStart = 0;
   let openStruct: { name: string; bodyStart: number; line: number } | null = null;
+  let openFunction: GlslFunction | null = null;
 
   for (let i = 0; i < code.length; i++) {
     const ch = code[i];
@@ -214,7 +230,10 @@ export function parseGlsl(text: string): ParsedGlsl {
           openStruct = { name: st[1], bodyStart: i + 1, line };
         } else {
           const fn = parseFunctionHeader(header);
-          if (fn) functions.push({ ...fn, line, doc: docAbove(originalLines, line) });
+          if (fn) {
+            openFunction = { ...fn, line, endLine: null, doc: docAbove(originalLines, line) };
+            functions.push(openFunction);
+          }
         }
       }
       depth++;
@@ -224,7 +243,13 @@ export function parseGlsl(text: string): ParsedGlsl {
         if (openStruct) {
           const members = splitTopLevel(code.slice(openStruct.bodyStart, i), ';').flatMap(parseDeclaration);
           structs.push({ name: openStruct.name, members, line: openStruct.line });
+          spans.push({ start: openStruct.line, end: lineAt(i), body: null });
           openStruct = null;
+        }
+        if (openFunction) {
+          openFunction.endLine = lineAt(i);
+          spans.push({ start: openFunction.line, end: openFunction.endLine, body: openFunction });
+          openFunction = null;
         }
         chunkStart = i + 1;
       }
@@ -233,7 +258,8 @@ export function parseGlsl(text: string): ParsedGlsl {
       const line = lineAt(firstNonSpace(chunkStart, i));
       const proto = parseFunctionHeader(stmt);
       if (proto) {
-        functions.push({ ...proto, line, doc: docAbove(originalLines, line) });
+        functions.push({ ...proto, line, endLine: null, doc: docAbove(originalLines, line) });
+        spans.push({ start: line, end: lineAt(i), body: null });
       } else {
         for (const field of parseDeclaration(stmt)) variables.push({ ...field, line });
       }
@@ -241,16 +267,18 @@ export function parseGlsl(text: string): ParsedGlsl {
     }
   }
 
-  return { functions: dedupePrototypes(functions), macros, structs, variables, includes, code };
+  return { functions: dedupePrototypes(functions), macros, structs, variables, includes, spans, code };
 }
 
-// 前方宣言と本体の両方がある関数を 1 つにまとめる。doc は本体側を優先する
+// 前方宣言と本体の両方がある関数を 1 つにまとめる。位置は本体側、doc は本体側に無ければ前方宣言から取る
 function dedupePrototypes(functions: GlslFunction[]): GlslFunction[] {
   const seen = new Map<string, GlslFunction>();
   for (const fn of functions) {
     const key = `${fn.name}(${fn.params.map(paramType).join(',')})`;
     const prev = seen.get(key);
-    if (!prev || (!prev.doc && fn.doc)) seen.set(key, fn);
+    if (!prev) seen.set(key, fn);
+    else if (prev.endLine === null && fn.endLine !== null) seen.set(key, { ...fn, doc: fn.doc || prev.doc });
+    else if (!prev.doc && fn.doc) seen.set(key, { ...prev, doc: fn.doc });
   }
   return [...seen.values()];
 }
@@ -270,17 +298,41 @@ export function formatMacro(macro: GlslMacro): string {
   return `#define ${macro.name}${params} ${macro.value}`.trimEnd();
 }
 
+export function enclosingFunction(doc: ParsedGlsl, line: number): GlslFunction | null {
+  return doc.spans.find(s => s.body && s.start <= line && line <= s.end)?.body ?? null;
+}
+
+export interface LocalDeclaration {
+  type: string;
+  line: number;
+}
+
 /**
- * 関数本体の中を含めた変数宣言 (引数も含む) を拾う。スコープは見ない。
+ * カーソル行を含む関数 (無ければトップレベル) の、カーソル行までの変数宣言 (引数を含む)。
+ * ブロックは追わない代わりに、同じ名前は後の (カーソルに近い) 宣言を勝たせる。
  * 型名が既知 (組み込み型か struct) のものだけにして、式の誤検出を抑える
  */
-export function collectLocalDeclarations(code: string, structNames: Iterable<string>): Map<string, string> {
+export function collectLocalDeclarations(doc: ParsedGlsl, line: number, structNames: Iterable<string>): Map<string, LocalDeclaration> {
+  const fn = enclosingFunction(doc, line);
+  const firstLine = fn ? fn.line : 1;
+  const scope = doc.code.split('\n').slice(firstLine - 1, line);
+  if (!fn) {
+    // 関数の外では、関数の本体・前方宣言の引数・struct のメンバを除く
+    for (const s of doc.spans) {
+      for (let l = s.start; l <= Math.min(s.end, line); l++) scope[l - 1] = '';
+    }
+  }
+  const text = scope.join('\n');
+
   const types = new Set([...BUILTIN_TYPES, ...structNames]);
-  const result = new Map<string, string>();
+  const result = new Map<string, LocalDeclaration>();
   const re = /\b([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\s*(?=[=;,)\[])/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(code)) !== null) {
-    if (types.has(m[1]) && !result.has(m[2])) result.set(m[2], m[1]);
+  let declLine = firstLine;
+  let scanned = 0;
+  while ((m = re.exec(text)) !== null) {
+    for (; scanned < m.index; scanned++) if (text[scanned] === '\n') declLine++;
+    if (types.has(m[1])) result.set(m[2], { type: m[1], line: declLine });
   }
   return result;
 }

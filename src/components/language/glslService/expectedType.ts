@@ -3,11 +3,10 @@
 // `a * |` のような演算子の後は、スカラーとベクトルが混ざって正しく絞れないので推定しない
 
 import { paramType } from './symbols';
-import { swizzleType } from './typeSystem';
 
 export interface ExpectedTypeEnv {
-  /** 変数名 → 型。分からなければ undefined */
-  variableType(name: string): string | undefined;
+  /** 'p'・'p.xy'・'ray.dir' のような式 → 型。分からなければ undefined */
+  expressionType(expr: string): string | undefined;
   /** 組み込み型か struct 名か */
   isType(name: string): boolean;
   /** 関数名 → 引数リストの候補 (オーバーロード分) */
@@ -47,13 +46,9 @@ export function inferExpectedTypes(textBefore: string, env: ExpectedTypeEnv): st
     const lhs = t.slice(0, -1).trimEnd();
     const decl = /\b([A-Za-z_]\w*)\s+[A-Za-z_]\w*\s*(?:\[[^\]]*\])?$/.exec(lhs);
     if (decl && env.isType(decl[1])) return [decl[1]];
-    const assign = /(\$?[A-Za-z_]\w*)(?:\.([xyzwrgba]{1,4}))?$/.exec(lhs);
-    if (!assign) return null;
-    const type = env.variableType(assign[1]);
-    if (!type) return null;
-    if (!assign[2]) return [type];
-    const swizzled = swizzleType(type, assign[2]);
-    return swizzled ? [swizzled] : null;
+    const assign = /(\$?[A-Za-z_]\w*(?:\s*\.\s*\w+)*)$/.exec(lhs);
+    const type = assign ? env.expressionType(assign[1]) : undefined;
+    return type ? [type] : null;
   }
 
   if (/\breturn$/.test(t)) {

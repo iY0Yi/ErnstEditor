@@ -7,11 +7,13 @@ import { basename, dirname, isUnder, pathKey, relativePath, toNativePath } from 
 import {
   collectIdentifiers,
   collectLocalDeclarations,
+  enclosingFunction,
   formatMacro,
   formatSignature,
   GlslFunction,
   GlslMacro,
   GlslStruct,
+  LocalDeclaration,
   ParsedGlsl,
   stripComments
 } from './symbols';
@@ -26,8 +28,8 @@ import {
   openTabs,
   parseCached
 } from './workspaceIndex';
-import { bestFit } from './typeSystem';
-import { placeholdersOf } from './uberPlaceholders';
+import { bestFit, swizzleType } from './typeSystem';
+import { Placeholder, placeholdersOf } from './uberPlaceholders';
 
 type MonacoApi = typeof Monaco;
 type Model = Monaco.editor.ITextModel;
@@ -62,7 +64,7 @@ function makeRanker(expected: string[] | null): Ranker {
 }
 
 function builtinAsFunctions(b: BuiltinFunction): GlslFunction[] {
-  return b.overloads.map(o => ({ name: b.name, returnType: o.returnType, params: o.params, line: 0, doc: b.doc }));
+  return b.overloads.map(o => ({ name: b.name, returnType: o.returnType, params: o.params, line: 0, endLine: null, doc: b.doc }));
 }
 
 interface Located<T> {
@@ -146,16 +148,45 @@ function includeEdit(monaco: MonacoApi, model: Model, doc: ParsedGlsl, docPath: 
   return { range: new monaco.Range(afterLine + 1, 1, afterLine + 1, 1), text: `${text}\n` };
 }
 
+interface Scope {
+  locals: Map<string, LocalDeclaration>;
+  placeholders: Map<string, Placeholder>;
+  /** プレースホルダ → ローカル → include 先を含むグローバル */
+  variableType(name: string): string | undefined;
+  /** 'p.xy' → 'vec2'、'ray.dir' → 'vec3' */
+  expressionType(expr: string): string | undefined;
+}
+
+async function scopeAt(doc: ParsedGlsl, table: SymbolTable, docPath: string | null, line: number): Promise<Scope> {
+  const locals = collectLocalDeclarations(doc, line, table.structs.keys());
+  const placeholders = await placeholdersOf(docPath);
+  const variableType = (name: string): string | undefined =>
+    placeholders.get(name)?.type ?? locals.get(name)?.type ?? table.variables.get(name)?.type;
+  const expressionType = (expr: string): string | undefined => {
+    const [base, ...members] = expr.split('.').map(s => s.trim());
+    let type = variableType(base);
+    for (const member of members) {
+      if (!type) return undefined;
+      const field = table.structs.get(type)?.symbol.members.find(m => m.name === member);
+      type = field ? field.type : swizzleType(type, member) ?? undefined;
+    }
+    return type;
+  };
+  return { locals, placeholders, variableType, expressionType };
+}
+
+// `p.`・`p.xy.`・`$cp.`・`ray.dir.` の受け手。添字 (a[i].) と呼び出しの結果 (f().) は扱わない
+const MEMBER_ACCESS_RE = /(\$?[A-Za-z_]\w*(?:\s*\.\s*\w+)*)\s*\.\s*\w*$/;
+
 function memberCompletions(
   monaco: MonacoApi,
-  receiver: string,
+  type: string,
   table: SymbolTable,
-  variableType: (name: string) => string | undefined,
+  expected: string[] | null,
   range: Monaco.IRange
 ): Monaco.languages.CompletionItem[] | null {
-  const type = variableType(receiver);
-  if (!type) return null;
   const Kind = monaco.languages.CompletionItemKind;
+  const rank = makeRanker(expected);
   const struct = table.structs.get(type);
   if (struct) {
     return struct.symbol.members.map((m, i) => ({
@@ -163,22 +194,30 @@ function memberCompletions(
       kind: Kind.Field,
       detail: m.type,
       insertText: m.name,
-      sortText: String(i).padStart(3, '0'),
+      sortText: rank([m.type]) + String(i).padStart(3, '0'),
       range
     }));
   }
   const vec = vectorInfo(type);
-  if (vec) {
-    return ['xyzw', 'rgba'].flatMap(set => set.slice(0, vec.size).split('').map((c, i) => ({
-      label: c,
-      kind: Kind.Field,
-      detail: vec.scalar,
-      insertText: c,
-      sortText: `${set === 'xyzw' ? 0 : 1}${i}`,
-      range
-    })));
+  if (!vec) return null;
+  const items: Monaco.languages.CompletionItem[] = ['xyzw', 'rgba'].flatMap(set => set.slice(0, vec.size).split('').map((c, i) => ({
+    label: c,
+    kind: Kind.Field,
+    detail: vec.scalar,
+    insertText: c,
+    sortText: rank([vec.scalar]) + `${set === 'xyzw' ? 0 : 1}${i}`,
+    range
+  })));
+  // 2 成分以上の組み合わせは多すぎるので、`vec3 q = v4.|` のように期待される成分数へ切り詰める 1 候補だけ出す
+  const sizes = new Set((expected ?? []).flatMap(e => {
+    const v = vectorInfo(e);
+    return v && v.scalar === vec.scalar && v.size < vec.size ? [v.size] : [];
+  }));
+  for (const size of sizes) {
+    const swizzle = 'xyzw'.slice(0, size);
+    items.push({ label: swizzle, kind: Kind.Field, detail: swizzleType(type, swizzle) ?? undefined, insertText: swizzle, sortText: `!${size}`, range });
   }
-  return null;
+  return items;
 }
 
 async function provideCompletions(
@@ -194,27 +233,24 @@ async function provideCompletions(
   const docPath = filePathOfModel(model);
   const ctx = await buildContext(docPath, doc);
   const table = buildSymbolTable(doc, ctx);
-  const locals = collectLocalDeclarations(doc.code, table.structs.keys());
-  const placeholders = await placeholdersOf(docPath);
-  const variableType = (name: string): string | undefined =>
-    placeholders.get(name)?.type ?? locals.get(name) ?? table.variables.get(name)?.type;
+  const { locals, placeholders, expressionType } = await scopeAt(doc, table, docPath, position.lineNumber);
 
   // wordPattern で $cp を 1 語にしているので、$ の直後なら range は $ から始まる
   const word = model.getWordUntilPosition(position);
   const dollar = word.word.startsWith('$');
   const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
-
-  const member = /(\$?[A-Za-z_]\w*)\s*\.\s*\w*$/.exec(lineToCursor);
-  if (member) {
-    // 型が分からない (ubo など) ときは空を返し、Monaco の単語補完に任せる
-    return { suggestions: memberCompletions(monaco, member[1], table, variableType, range) ?? [] };
-  }
+  const member = MEMBER_ACCESS_RE.exec(lineToCursor);
+  const receiverType = member ? expressionType(member[1]) : undefined;
+  // 型が分からない (ubo など) ときは空を返し、Monaco の単語補完に任せる
+  if (member && !receiverType) return { suggestions: [] };
 
   const libs = ctx.trackRoot ? await getLibModules(ctx.trackRoot) : [];
   const startLine = Math.max(1, position.lineNumber - 30);
-  const textBefore = stripComments(model.getValueInRange(new monaco.Range(startLine, 1, position.lineNumber, range.startColumn)));
+  // メンバ補完では、受け手の式 (`vec3 q = p.|` の p.) の手前までで期待される型を推定する
+  const exprStart = member ? member.index + 1 : range.startColumn;
+  const textBefore = stripComments(model.getValueInRange(new monaco.Range(startLine, 1, position.lineNumber, exprStart)));
   const env: ExpectedTypeEnv = {
-    variableType,
+    expressionType,
     isType: name => BUILTIN_TYPE_SET.has(name) || table.structs.has(name),
     overloads: name => {
       const reachable = table.functions.get(name);
@@ -225,7 +261,11 @@ async function provideCompletions(
     },
     enclosingReturnType: enclosingFunction(doc, position.lineNumber)?.returnType ?? null
   };
-  const rank = makeRanker(inferExpectedTypes(textBefore, env));
+  const expected = inferExpectedTypes(textBefore, env);
+
+  if (receiverType) return { suggestions: memberCompletions(monaco, receiverType, table, expected, range) ?? [] };
+
+  const rank = makeRanker(expected);
   // `vec3 n = |` の n 自身は初期化に使えないので出さない
   const declaring = /\b[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*=[^;=]*$/.exec(lineToCursor)?.[1];
 
@@ -250,7 +290,7 @@ async function provideCompletions(
   if (dollar) return { suggestions: placeholderItems };
   for (const item of placeholderItems) add(item.insertText, item);
 
-  for (const [name, type] of locals) {
+  for (const [name, { type }] of locals) {
     add(name, { label: name, kind: Kind.Variable, detail: type, insertText: name, sortText: rank([type]) + SORT_LOCAL, range });
   }
   for (const [name, overloads] of table.functions) {
@@ -343,15 +383,6 @@ async function provideCompletions(
   return { suggestions: [...items.values()] };
 }
 
-/** トップレベルの関数しか拾っていないので、カーソルより前で最後に始まった関数がカーソルを含む関数 */
-function enclosingFunction(doc: ParsedGlsl, line: number): GlslFunction | null {
-  let found: GlslFunction | null = null;
-  for (const fn of doc.functions) {
-    if (fn.line <= line && (!found || fn.line > found.line)) found = fn;
-  }
-  return found;
-}
-
 function libCompletions(
   monaco: MonacoApi,
   model: Model,
@@ -438,10 +469,26 @@ async function provideHover(monaco: MonacoApi, model: Model, position: Monaco.Po
     if (!p) return null;
     return { range, contents: [{ value: ['```glsl\n' + `${p.type} ${p.name}` + '\n```', p.desc, `*uber_scripts/${p.context} のプレースホルダ*`].join('\n\n') }] };
   }
-  const before = model.getLineContent(position.lineNumber).slice(0, word.startColumn - 1);
-  if (/\.\s*$/.test(before)) return null;
+  const lineText = model.getLineContent(position.lineNumber);
+  const before = lineText.slice(0, word.startColumn - 1);
+  const typeHover = (type: string, expr: string): Monaco.languages.Hover =>
+    ({ range, contents: [{ value: '```glsl\n' + `${type} ${expr}` + '\n```' }] });
+
+  if (/\.\s*$/.test(before)) {
+    const receiver = MEMBER_ACCESS_RE.exec(before);
+    if (!receiver) return null;
+    const doc = parseModel(model);
+    const docPath = filePathOfModel(model);
+    const table = buildSymbolTable(doc, await buildContext(docPath, doc));
+    const expr = `${receiver[1]}.${word.word}`.replace(/\s+/g, '');
+    const type = (await scopeAt(doc, table, docPath, position.lineNumber)).expressionType(expr);
+    return type ? typeHover(type, expr) : null;
+  }
 
   const { fn, macro, table, ctx, doc } = await lookupFunction(model, word.word);
+  const scope = await scopeAt(doc, table, filePathOfModel(model), position.lineNumber);
+  const local = isCall(lineText, word) ? undefined : scope.locals.get(word.word);
+  if (local) return typeHover(local.type, word.word);
   if (fn) {
     const wheres = [...new Set(fn.overloads.map(o => o.where))].join(' / ');
     return { range, contents: [functionDoc(fn.overloads.map(o => o.fn), wheres, fn.note)] };
@@ -455,10 +502,13 @@ async function provideHover(monaco: MonacoApi, model: Model, position: Monaco.Po
     const body = struct.symbol.members.map(m => `  ${m.type} ${m.name};`).join('\n');
     return { range, contents: [{ value: '```glsl\nstruct ' + word.word + ' {\n' + body + '\n}\n```\n\n*' + displayPath(struct.path, ctx) + '*' }] };
   }
-  const locals = collectLocalDeclarations(doc.code, table.structs.keys());
-  const type = locals.get(word.word) ?? table.variables.get(word.word)?.type;
-  if (type) return { range, contents: [{ value: '```glsl\n' + `${type} ${word.word}` + '\n```' }] };
-  return null;
+  const type = scope.variableType(word.word);
+  return type ? typeHover(type, word.word) : null;
+}
+
+/** `name(` の呼び出しなら、同名のローカル変数ではなく関数を指している */
+function isCall(lineText: string, word: Monaco.editor.IWordAtPosition): boolean {
+  return /^\s*\(/.test(lineText.slice(word.endColumn - 1));
 }
 
 /** code はコメントとプリプロセッサ行を空白にしたものなので、マクロの名前は見つからず 1 列目になる */
@@ -468,17 +518,19 @@ function definitionRange(monaco: MonacoApi, code: string, line: number, name: st
   return new monaco.Range(line, index + 1, line, index + 1 + name.length);
 }
 
-// 引く順は lookupFunction と同じ。組み込み関数と同名の lib 関数があっても、include していなければ組み込みを指している
+// 引く順はホバーと同じ (呼び出しでなければローカル、その後は lookupFunction の順)。
+// 組み込み関数と同名の lib 関数があっても、include していなければ組み込みを指している
 async function provideDefinition(monaco: MonacoApi, model: Model, position: Monaco.Position): Promise<Monaco.languages.Location[] | null> {
   const word = model.getWordAtPosition(position);
   // $cp のプレースホルダは ErnstRenderer が埋めるので、定義はどのファイルにも無い
   if (!word || !/^[A-Za-z_]\w*$/.test(word.word)) return null;
-  const before = model.getLineContent(position.lineNumber).slice(0, word.startColumn - 1);
-  if (/\.\s*$/.test(before)) return null;
+  const lineText = model.getLineContent(position.lineNumber);
+  if (/\.\s*$/.test(lineText.slice(0, word.startColumn - 1))) return null;
   const name = word.word;
 
   const doc = parseModel(model);
-  const ctx = await buildContext(filePathOfModel(model), doc);
+  const docPath = filePathOfModel(model);
+  const ctx = await buildContext(docPath, doc);
   const table = buildSymbolTable(doc, ctx);
   const codeOf = new Map(ctx.files.map(f => [f.path, f.parsed.code]));
   const at = (path: string | null, line: number): Monaco.languages.Location => ({
@@ -486,6 +538,10 @@ async function provideDefinition(monaco: MonacoApi, model: Model, position: Mona
     range: definitionRange(monaco, (path === null ? doc.code : codeOf.get(path)) ?? '', line, name)
   });
 
+  if (!isCall(lineText, word)) {
+    const local = collectLocalDeclarations(doc, position.lineNumber, table.structs.keys()).get(name);
+    if (local) return [at(null, local.line)];
+  }
   const fns = table.functions.get(name);
   if (fns) return fns.map(f => at(f.path, f.symbol.line));
   const macro = table.macros.get(name);
@@ -533,7 +589,7 @@ async function provideSignatureHelp(monaco: MonacoApi, model: Model, position: M
     }));
   } else if (macro?.symbol.params) {
     const m = macro.symbol;
-    signatures = [toSignature({ name: m.name, returnType: '#define', params: m.params ?? [], line: m.line, doc: m.doc }, { value: m.value })];
+    signatures = [toSignature({ name: m.name, returnType: '#define', params: m.params ?? [], line: m.line, endLine: null, doc: m.doc }, { value: m.value })];
   } else {
     return null;
   }
