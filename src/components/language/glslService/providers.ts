@@ -1,5 +1,7 @@
 import type * as Monaco from 'monaco-editor';
 import { BUILTIN_FUNCTIONS, BUILTIN_TYPES, KEYWORDS, vectorInfo } from './builtins';
+import { BUILTIN_SIGNATURES, BuiltinFunction, DEPRECATED_BUILTINS } from './builtinSignatures';
+import { ExpectedTypeEnv, findOpenCall, inferExpectedTypes } from './expectedType';
 import { basename, dirname, isUnder, pathKey, relativePath } from './paths';
 import {
   collectIdentifiers,
@@ -21,6 +23,7 @@ import {
   LibModule,
   parseCached
 } from './workspaceIndex';
+import { bestFit } from './typeSystem';
 
 type MonacoApi = typeof Monaco;
 type Model = Monaco.editor.ITextModel;
@@ -32,6 +35,31 @@ const SORT_BUILTIN = '1';
 const SORT_REACHABLE = '2';
 const SORT_LIB = '3';
 const SORT_WORD = '4';
+
+const BUILTIN_TYPE_SET = new Set(BUILTIN_TYPES);
+const BUILTIN_WHERE = 'GLSL 組み込み関数';
+
+/**
+ * 期待される型が分かるとき、sortText の先頭に付ける当てはまり具合。
+ * 0: 一致 / 1: 総称型や暗黙変換で入る / 2: 型が分からない / 3: 入らない / 4: 値にならない (void や制御構文)
+ * 型による並びを、出どころ (SORT_*) による並びより優先する
+ */
+type Ranker = (valueTypes: string[] | null) => string;
+
+function makeRanker(expected: string[] | null): Ranker {
+  if (!expected) return () => '';
+  return valueTypes => {
+    if (valueTypes === null) return '2';
+    const values = valueTypes.filter(t => t !== 'void');
+    if (values.length === 0) return '4';
+    const fit = bestFit(values, expected);
+    return fit === 0 ? '0' : fit === 1 ? '1' : '3';
+  };
+}
+
+function builtinAsFunctions(b: BuiltinFunction): GlslFunction[] {
+  return b.overloads.map(o => ({ name: b.name, returnType: o.returnType, params: o.params, line: 0, doc: b.doc }));
+}
 
 interface Located<T> {
   symbol: T;
@@ -173,14 +201,33 @@ async function provideCompletions(
     return { suggestions: memberCompletions(monaco, member[1], table, locals, range) ?? [] };
   }
 
+  const libs = ctx.trackRoot ? await getLibModules(ctx.trackRoot) : [];
+  const startLine = Math.max(1, position.lineNumber - 30);
+  const textBefore = stripComments(model.getValueInRange(new monaco.Range(startLine, 1, position.lineNumber, word.startColumn)));
+  const env: ExpectedTypeEnv = {
+    variableType: name => locals.get(name) ?? table.variables.get(name)?.type,
+    isType: name => BUILTIN_TYPE_SET.has(name) || table.structs.has(name),
+    overloads: name => {
+      const reachable = table.functions.get(name);
+      if (reachable) return reachable.map(r => r.symbol.params);
+      const builtin = BUILTIN_SIGNATURES.get(name);
+      if (builtin) return builtin.overloads.map(o => o.params);
+      return libs.flatMap(lib => lib.parsed.functions.filter(f => f.name === name).map(f => f.params));
+    },
+    enclosingReturnType: enclosingFunction(doc, position.lineNumber)?.returnType ?? null
+  };
+  const rank = makeRanker(inferExpectedTypes(textBefore, env));
+  // `vec3 n = |` の n 自身は初期化に使えないので出さない
+  const declaring = /\b[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*=[^;=]*$/.exec(lineToCursor)?.[1];
+
   const Kind = monaco.languages.CompletionItemKind;
   const items = new Map<string, Monaco.languages.CompletionItem>();
   const add = (key: string, item: Monaco.languages.CompletionItem): void => {
-    if (!items.has(key)) items.set(key, item);
+    if (key !== declaring && !items.has(key)) items.set(key, item);
   };
 
   for (const [name, type] of locals) {
-    add(name, { label: name, kind: Kind.Variable, detail: type, insertText: name, sortText: SORT_LOCAL, range });
+    add(name, { label: name, kind: Kind.Variable, detail: type, insertText: name, sortText: rank([type]) + SORT_LOCAL, range });
   }
   for (const [name, overloads] of table.functions) {
     const fns = overloads.map(o => o.symbol);
@@ -191,7 +238,7 @@ async function provideCompletions(
       detail: formatSignature(fns[0]) + more,
       documentation: functionDoc(fns, displayPath(overloads[0].path, ctx)),
       insertText: name,
-      sortText: SORT_REACHABLE,
+      sortText: rank(fns.map(f => f.returnType)) + SORT_REACHABLE,
       range
     });
   }
@@ -202,7 +249,7 @@ async function provideCompletions(
       detail: formatMacro(symbol),
       documentation: symbol.doc || undefined,
       insertText: name,
-      sortText: SORT_REACHABLE,
+      sortText: rank(null) + SORT_REACHABLE,
       range
     });
   }
@@ -213,7 +260,7 @@ async function provideCompletions(
       detail: `struct ${name}`,
       documentation: { value: '```glsl\n' + symbol.members.map(m => `${m.type} ${m.name};`).join('\n') + '\n```' },
       insertText: name,
-      sortText: SORT_REACHABLE,
+      sortText: rank([name]) + SORT_REACHABLE,
       range
     });
   }
@@ -223,25 +270,42 @@ async function provideCompletions(
       kind: Kind.Variable,
       detail: type,
       insertText: name,
-      sortText: SORT_REACHABLE,
+      sortText: rank([type]) + SORT_REACHABLE,
       range
     });
   }
   for (const name of BUILTIN_FUNCTIONS) {
-    add(name, { label: name, kind: Kind.Function, detail: 'GLSL 組み込み関数', insertText: name, sortText: SORT_BUILTIN, range });
+    const builtin = BUILTIN_SIGNATURES.get(name);
+    if (!builtin) {
+      add(name, { label: name, kind: Kind.Function, detail: BUILTIN_WHERE, insertText: name, sortText: rank(null) + SORT_BUILTIN, range });
+      continue;
+    }
+    const fns = builtinAsFunctions(builtin);
+    const deprecated = DEPRECATED_BUILTINS.has(name);
+    add(name, {
+      label: { label: name, description: BUILTIN_WHERE },
+      kind: Kind.Function,
+      detail: formatSignature(fns[0]) + (fns.length > 1 ? ` (+${fns.length - 1})` : ''),
+      documentation: functionDoc(fns, BUILTIN_WHERE),
+      insertText: name,
+      sortText: deprecated ? `9${SORT_BUILTIN}` : rank(fns.map(f => f.returnType)) + SORT_BUILTIN,
+      tags: deprecated ? [monaco.languages.CompletionItemTag.Deprecated] : undefined,
+      range
+    });
   }
   for (const name of BUILTIN_TYPES) {
-    add(name, { label: name, kind: Kind.Keyword, insertText: name, sortText: SORT_BUILTIN, range });
+    add(name, { label: name, kind: Kind.Keyword, insertText: name, sortText: rank([name]) + SORT_BUILTIN, range });
   }
   for (const name of KEYWORDS) {
-    add(name, { label: name, kind: Kind.Keyword, insertText: name, sortText: SORT_BUILTIN, range });
+    const valueTypes = name === 'true' || name === 'false' ? ['bool'] : ['void'];
+    add(name, { label: name, kind: Kind.Keyword, insertText: name, sortText: rank(valueTypes) + SORT_BUILTIN, range });
   }
 
   if (ctx.trackRoot) {
     const blocked = autoIncludeBlockedReason(docPath, ctx.trackRoot);
-    for (const lib of await getLibModules(ctx.trackRoot)) {
+    for (const lib of libs) {
       if (ctx.reachableKeys.has(pathKey(lib.path))) continue;
-      for (const item of libCompletions(monaco, model, doc, docPath, lib, blocked, range)) {
+      for (const item of libCompletions(monaco, model, doc, docPath, lib, blocked, range, rank)) {
         if (!items.has(item.insertText)) add(`lib:${lib.relPath}:${item.insertText}`, item);
       }
     }
@@ -249,10 +313,19 @@ async function provideCompletions(
 
   for (const name of collectIdentifiers(doc.code)) {
     if (name === word.word) continue;
-    add(name, { label: name, kind: Kind.Text, insertText: name, sortText: SORT_WORD, range });
+    add(name, { label: name, kind: Kind.Text, insertText: name, sortText: rank(null) + SORT_WORD, range });
   }
 
   return { suggestions: [...items.values()] };
+}
+
+/** トップレベルの関数しか拾っていないので、カーソルより前で最後に始まった関数がカーソルを含む関数 */
+function enclosingFunction(doc: ParsedGlsl, line: number): GlslFunction | null {
+  let found: GlslFunction | null = null;
+  for (const fn of doc.functions) {
+    if (fn.line <= line && (!found || fn.line > found.line)) found = fn;
+  }
+  return found;
 }
 
 function libCompletions(
@@ -262,7 +335,8 @@ function libCompletions(
   docPath: string | null,
   lib: LibModule,
   blocked: string | null,
-  range: Monaco.IRange
+  range: Monaco.IRange,
+  rank: Ranker
 ): Monaco.languages.CompletionItem[] {
   const Kind = monaco.languages.CompletionItemKind;
   const where = `lib_modules/${lib.relPath}`;
@@ -277,7 +351,7 @@ function libCompletions(
     documentation: functionDoc(fns, where, note),
     insertText: name,
     additionalTextEdits: edits,
-    sortText: SORT_LIB,
+    sortText: rank(fns.map(f => f.returnType)) + SORT_LIB,
     range
   }));
   // packS2 や fbm_base のようにマクロだけで書かれた lib もある
@@ -288,7 +362,7 @@ function libCompletions(
     documentation: { value: [m.doc, `*${where}*`, note].filter(Boolean).join('\n\n') },
     insertText: m.name,
     additionalTextEdits: edits,
-    sortText: SORT_LIB,
+    sortText: rank(null) + SORT_LIB,
     range
   }));
   return [...functions, ...macros];
@@ -311,6 +385,12 @@ async function lookupFunction(model: Model, name: string): Promise<{ fn: Functio
     return { fn: { overloads }, macro: null, table, ctx, doc };
   }
   const macro = table.macros.get(name) ?? null;
+  // lib に組み込みと同名の関数があっても、include していなければ組み込みの方を指しているはず
+  const builtin = macro ? undefined : BUILTIN_SIGNATURES.get(name);
+  if (builtin) {
+    const overloads = builtinAsFunctions(builtin).map(fn => ({ fn, where: BUILTIN_WHERE }));
+    return { fn: { overloads }, macro: null, table, ctx, doc };
+  }
   if (!macro && ctx.trackRoot) {
     const libs = await getLibModules(ctx.trackRoot);
     const overloads = libs.flatMap(lib => lib.parsed.functions
@@ -349,27 +429,6 @@ async function provideHover(monaco: MonacoApi, model: Model, position: Monaco.Po
   const locals = collectLocalDeclarations(doc.code, table.structs.keys());
   const type = locals.get(word.word) ?? table.variables.get(word.word)?.type;
   if (type) return { range, contents: [{ value: '```glsl\n' + `${type} ${word.word}` + '\n```' }] };
-  return null;
-}
-
-/** カーソル直前の閉じていない呼び出しの関数名と、何番目の引数か */
-function findOpenCall(text: string): { name: string; argIndex: number } | null {
-  let depth = 0;
-  let argIndex = 0;
-  for (let i = text.length - 1; i >= 0; i--) {
-    const c = text[i];
-    if (c === ')' || c === ']') depth++;
-    else if (c === '[') depth--;
-    else if (c === '(') {
-      if (depth > 0) {
-        depth--;
-        continue;
-      }
-      const name = /([A-Za-z_]\w*)\s*$/.exec(text.slice(0, i));
-      return name ? { name: name[1], argIndex } : null;
-    } else if (c === ',' && depth === 0) argIndex++;
-    else if ((c === ';' || c === '{' || c === '}') && depth === 0) return null;
-  }
   return null;
 }
 

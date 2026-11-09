@@ -15,7 +15,7 @@ export const BUILTIN_FUNCTIONS = [
   'inverse', 'inversesqrt', 'isinf', 'isnan', 'ldexp', 'length', 'lessThan',
   'lessThanEqual', 'log', 'log2', 'matrixCompMult', 'max', 'memoryBarrier',
   'memoryBarrierAtomicCounter', 'memoryBarrierBuffer', 'memoryBarrierImage',
-  'memoryBarrierShared', 'min', 'mix', 'mod', 'modf', 'noise', 'noise1', 'noise2',
+  'memoryBarrierShared', 'min', 'mix', 'mod', 'modf', 'noise1', 'noise2',
   'noise3', 'noise4', 'normalize', 'not', 'notEqual', 'outerProduct', 'packDouble2x32',
   'packHalf2x16', 'packSnorm2x16', 'packSnorm4x8', 'packUnorm2x16', 'packUnorm4x8',
   'pow', 'radians', 'reflect', 'refract', 'round', 'roundEven', 'sign', 'sin', 'sinh',

@@ -100,7 +100,7 @@ export function splitTopLevel(s: string, sep: string): string[] {
   return out;
 }
 
-function parseFunctionHeader(header: string): Pick<GlslFunction, 'name' | 'returnType' | 'params'> | null {
+export function parseFunctionHeader(header: string): Pick<GlslFunction, 'name' | 'returnType' | 'params'> | null {
   const h = header.replace(/\s+/g, ' ').trim();
   const m = FUNCTION_HEADER_RE.exec(h);
   if (!m) return null;

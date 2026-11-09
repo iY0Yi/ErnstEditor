@@ -6,7 +6,7 @@
 import type * as Monaco from 'monaco-editor';
 import { electronClient } from '../../../services/electronClient';
 import { DirEntry, FileTab } from '../../../types';
-import { collapsePath, dirname, isUnder, joinPath, pathKey } from './paths';
+import { basename, collapsePath, dirname, isUnder, joinPath, pathKey } from './paths';
 import { parseGlsl, ParsedGlsl } from './symbols';
 
 const GLSL_FILE_RE = /\.(glsl|glslinc|vert|frag|vs|fs|geom|comp|tesc|tese|vertex|fragment|shader)$/i;
@@ -193,8 +193,11 @@ export async function buildContext(docPath: string | null, docParsed: ParsedGlsl
 export function autoIncludeBlockedReason(docPath: string | null, trackRoot: string | null): string | null {
   if (!docPath) return '未保存のファイルには include を自動で足しません';
   if (!trackRoot) return null;
-  if (isUnder(docPath, joinPath(trackRoot, 'uber_scripts'))) {
-    return 'uber スクリプトは埋め込み先で展開されるため、include は自動で足しません';
+  // uber_scripts の本体 (prim_*.frag など) は関数の中に埋め込まれるので、#include を書くとコンパイルが通らない。
+  // inc_*.glsl は #include で読み込まれ、自分の位置を基準に解決されるので自動で足してよい。
+  // ErnstRenderer 側に区別の仕組みは無く、inc_ という命名の慣習で見分けている
+  if (isUnder(docPath, joinPath(trackRoot, 'uber_scripts')) && !basename(docPath).startsWith('inc_')) {
+    return 'uber スクリプトの本体は関数の中に埋め込まれるため、include は自動で足しません (inc_ で始まるファイルでは足します)';
   }
   if (isUnder(docPath, joinPath(trackRoot, 'bl_modules'))) {
     return 'bl_modules は Blender が生成し直すため、include は自動で足しません';
