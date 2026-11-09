@@ -20,7 +20,7 @@ interface EditorContainerProps {
   getActiveTab: () => FileTab | null;
   updateTab: (tabId: string, updates: Partial<FileTab>) => void;
   onOpenFile: () => void;
-  onSaveFile: () => void;
+  onSaveFile: () => Promise<void>;
   onNewFile: () => void;
   onEditorChange: (value: string | undefined) => void; // 追加
   // エディタ機能を外部に公開するためのコールバック
@@ -62,33 +62,21 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     // Monaco Editorインスタンスをグローバルに保存（setActiveBufferで使用）
     (window as any).monacoEditorInstance = editor;
     editorRef.current = editor;
-    try {
-      // AppContext をエディタインスタンスへブリッジ（ショートカットから利用）
-      (editor as any)._appContext = appContext;
-    } catch {}
+    // AppContext をエディタインスタンスへブリッジ（ショートカットから利用）
+    (editor as any)._appContext = appContext;
 
     // セッション保存済みのフォントサイズがあれば適用（遅延なく即適用）
-    const applyFontSize = (size?: number) => {
-      if (typeof size === 'number') {
-        editor.updateOptions({ fontSize: size });
-      }
-    };
-    try {
-      const lastSession = (window as any).__ERNST_LAST_SESSION__;
-      applyFontSize(lastSession?.editorFontSize);
-    } catch {}
+    const lastFontSize = (window as any).__ERNST_LAST_SESSION__?.editorFontSize;
+    if (typeof lastFontSize === 'number') {
+      editor.updateOptions({ fontSize: lastFontSize });
+    }
 
     // 保存ショートカット（既存: Context 経由）。未保存ファイルは Save As へフォールバック
     editor.addAction({
       id: 'save-file-app-context',
       label: 'Save File (Context)',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-      run: () => {
-        try {
-          // App側の onSaveFile を呼ぶ。未保存は Save As へフォールバック
-          onSaveFile();
-        } catch {}
-      }
+      run: () => onSaveFile()
     });
 
     // InlineNudgeboxManager統合（重要！）
@@ -97,18 +85,16 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     nudgeboxManager.integrate(editor);
 
     // #include パスでの "/" 入力時に補完を強制表示
-    try {
-      editor.onDidType((text: string) => {
-        if (text !== '/' && text !== '.') return;
-        const model = editor.getModel?.();
-        const pos = editor.getPosition?.();
-        if (!model || !pos) return;
-        const toCursor = model.getLineContent(pos.lineNumber).slice(0, pos.column - 1);
-        if (/#\s*include\s+["<][^"<>]*$/.test(toCursor)) {
-          editor.trigger('include-path', 'editor.action.triggerSuggest', {});
-        }
-      });
-    } catch {}
+    editor.onDidType((text: string) => {
+      if (text !== '/' && text !== '.') return;
+      const model = editor.getModel?.();
+      const pos = editor.getPosition?.();
+      if (!model || !pos) return;
+      const toCursor = model.getLineContent(pos.lineNumber).slice(0, pos.column - 1);
+      if (/#\s*include\s+["<][^"<>]*$/.test(toCursor)) {
+        editor.trigger('include-path', 'editor.action.triggerSuggest', {});
+      }
+    });
 
     // エディタAPI公開
     if (onEditorReady) {
@@ -123,17 +109,12 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
     }
 
     // 初回マウント時、アクティブタブが未設定なら最前タブをフォーカス
-    try {
-      const bmActive = (window as any)?.__ERNST_BUFFER_ACTIVE_ID__;
-      if (!bmActive) {
-        const tabs = (window as any)?.__ERNST_BUFFER_TABS__;
-        const firstId = Array.isArray(tabs) && tabs[0]?.id;
-        if (firstId) {
-          const setActive = (window as any)?.__ERNST_SET_ACTIVE_BUFFER__;
-          setActive?.(firstId);
-        }
+    if (!(window as any).__ERNST_BUFFER_ACTIVE_ID__) {
+      const firstId = window.__ERNST_BUFFER_TABS__?.[0]?.id;
+      if (firstId) {
+        (window as any).__ERNST_SET_ACTIVE_BUFFER__?.(firstId);
       }
-    } catch {}
+    }
 
   }, [onEditorReady, updateTab, onSaveFile]);
 
@@ -144,17 +125,15 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
   // セッション復元完了後にフォントサイズ適用イベントを受け取る
   React.useEffect(() => {
     const handler = (e: any) => {
-      try {
-        const size = e?.detail;
-        if (typeof size !== 'number') return;
-        // グローバル適用: 次回モデル切替時にも反映されるよう保持
-        (window as any).__ERNST_LAST_SESSION__ = {
-          ...(window as any).__ERNST_LAST_SESSION__,
-          editorFontSize: size
-        };
-        const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
-        editor?.updateOptions?.({ fontSize: size });
-      } catch {}
+      const size = e?.detail;
+      if (typeof size !== 'number') return;
+      // グローバル適用: 次回モデル切替時にも反映されるよう保持
+      (window as any).__ERNST_LAST_SESSION__ = {
+        ...(window as any).__ERNST_LAST_SESSION__,
+        editorFontSize: size
+      };
+      const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+      editor?.updateOptions?.({ fontSize: size });
     };
     window.addEventListener('ERNST_APPLY_FONT_SIZE', handler as EventListener);
     return () => window.removeEventListener('ERNST_APPLY_FONT_SIZE', handler as EventListener);
@@ -163,10 +142,8 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
   // 外部からのフォーカス要求
   React.useEffect(() => {
     const focusHandler = () => {
-      try {
-        const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
-        editor?.focus?.();
-      } catch {}
+      const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+      editor?.focus?.();
     };
     window.addEventListener('ERNST_FOCUS_EDITOR', focusHandler as EventListener);
     return () => window.removeEventListener('ERNST_FOCUS_EDITOR', focusHandler as EventListener);
@@ -185,10 +162,7 @@ const EditorContainer: React.FC<EditorContainerProps> = ({
   // ウィンドウリサイズで強制レイアウト（ミニマップ追従の安定化）
   useEffect(() => {
     const onResize = () => {
-      try {
-        const editor = (window as any).monacoEditorInstance || null;
-        editor?.layout?.();
-      } catch {}
+      (window as any).monacoEditorInstance?.layout?.();
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);

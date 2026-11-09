@@ -62,9 +62,7 @@ const App: React.FC = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       // ドラッグ終了後にエディタを確実にレイアウト
-      try {
-        (window as any).monacoEditorInstance?.layout?.();
-      } catch {}
+      (window as any).monacoEditorInstance?.layout?.();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -72,13 +70,11 @@ const App: React.FC = () => {
 
   // 幅の永続化（セッション情報へ反映）
   React.useEffect(() => {
-    try {
-      (window as any).__ERNST_UI_STATE__ = {
-        ...(window as any).__ERNST_UI_STATE__,
-        sidebarWidth,
-        isSidebarVisible
-      };
-    } catch {}
+    (window as any).__ERNST_UI_STATE__ = {
+      ...(window as any).__ERNST_UI_STATE__,
+      sidebarWidth,
+      isSidebarVisible
+    };
   }, [sidebarWidth, isSidebarVisible]);
 
   // セッション復元時のサイドバー幅適用
@@ -87,7 +83,7 @@ const App: React.FC = () => {
       const width = e?.detail;
       if (typeof width === 'number' && Number.isFinite(width)) {
         setSidebarWidth(Math.min(Math.max(width, 180), Math.floor(window.innerWidth * 0.7)));
-        try { (window as any).monacoEditorInstance?.layout?.(); } catch {}
+        (window as any).monacoEditorInstance?.layout?.();
       }
     };
     window.addEventListener('ERNST_APPLY_SIDEBAR_WIDTH', handler as EventListener);
@@ -99,16 +95,16 @@ const App: React.FC = () => {
   // Monaco Editor関連のPromise例外を処理
   React.useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      // Monaco Editorの「Cancelled」エラーを無視
-      if (event.reason &&
-          (event.reason.message === 'Cancelled' ||
-           event.reason.toString().includes('Cancelled'))) {
-        console.log('⚠️ Monaco Editor operation cancelled (normal behavior)');
-        event.preventDefault(); // エラー表示を抑制
+      // Monaco の CancellationError は無視する。WordHighlighter などがモデル切り替え時に Delayer を
+      // cancel し、受け手の無い Promise が reject される (Monaco 側の挙動)。判定は Monaco の isCancellationError と同じ
+      const reason = event.reason;
+      if (reason instanceof Error && reason.name === 'Canceled' && reason.message === 'Canceled') {
+        event.preventDefault();
         return;
       }
-      // その他のエラーは通常通り処理
+      // ブラウザ既定の「Uncaught (in promise)」と二重に出さない
       console.error('Unhandled promise rejection:', event.reason);
+      event.preventDefault();
     };
 
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
@@ -277,7 +273,7 @@ const App: React.FC = () => {
     setTrackDirectoryPath(trackPath);
     if (trackPath) {
       handleProjectRootChange(trackPath);
-      try { (window as any).__ERNST_PROJECT_ROOT__ = trackPath; } catch {}
+      window.__ERNST_PROJECT_ROOT__ = trackPath;
     }
   }, [handleProjectRootChange]);
 
@@ -456,7 +452,7 @@ const App: React.FC = () => {
         case 'view:toggle-sidebar': {
           setIsSidebarVisible(v => {
             const next = !v;
-            try { (window as any).monacoEditorInstance?.layout?.(); } catch {}
+            (window as any).monacoEditorInstance?.layout?.();
             return next;
           });
           break;
@@ -470,7 +466,7 @@ const App: React.FC = () => {
       }
     });
     return () => {
-      try { electronClient.removeAppActionListener?.(); } catch {}
+      electronClient.removeAppActionListener?.();
       if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, [tabs, activeTabId, setActiveBuffer, getActiveTab, closeTab, handleNewFile, handleOpenFile, saveActiveTabAs]);

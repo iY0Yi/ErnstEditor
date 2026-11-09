@@ -112,28 +112,23 @@ export function useSessionManager({
         }
 
         // UI状態を window へ保持（App から参照）
-        try {
-          const width = (sessionData as any).sidebarWidth;
-          (window as any).__ERNST_UI_STATE__ = {
-            ...(window as any).__ERNST_UI_STATE__,
-            sidebarWidth: width
-          };
-          if (typeof width === 'number') {
-            const evt = new CustomEvent('ERNST_APPLY_SIDEBAR_WIDTH', { detail: width });
-            window.dispatchEvent(evt);
-          }
-        } catch {}
+        const width = (sessionData as any).sidebarWidth;
+        (window as any).__ERNST_UI_STATE__ = {
+          ...(window as any).__ERNST_UI_STATE__,
+          sidebarWidth: width
+        };
+        if (typeof width === 'number') {
+          window.dispatchEvent(new CustomEvent('ERNST_APPLY_SIDEBAR_WIDTH', { detail: width }));
+        }
 
         // ウィンドウ位置/サイズはメイン側で適用済み。renderer 側にもキャッシュ
-        try {
-          const wb = (sessionData as any).windowBounds;
-          if (wb) {
-            (window as any).__ERNST_UI_STATE__ = {
-              ...(window as any).__ERNST_UI_STATE__,
-              windowBounds: wb
-            };
-          }
-        } catch {}
+        const wb = (sessionData as any).windowBounds;
+        if (wb) {
+          (window as any).__ERNST_UI_STATE__ = {
+            ...(window as any).__ERNST_UI_STATE__,
+            windowBounds: wb
+          };
+        }
 
         // エディタのフォントサイズ（ズーム相当）を遅延適用（EditorContainer側で受け取って適用）
         if (typeof (sessionData as any).editorFontSize === 'number') {

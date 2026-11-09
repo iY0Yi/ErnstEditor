@@ -269,6 +269,13 @@ const createWindow = (): void => {
   });
 };
 
+// 保存後にファイルツリーを更新させる。ウィンドウが無ければ送らない（保存自体は成功扱いのまま）
+function notifyExplorerRefresh(filePath: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath } });
+  }
+}
+
 // ファイル操作のIPC処理
 ipcMain.handle(IPC.FILE_OPEN, async (): Promise<{ filePath: string; content: string; fileName: string } | null> => {
   if (!mainWindow) return null;
@@ -352,13 +359,13 @@ ipcMain.handle(IPC.FILE_SAVE, async (event: any, filePath: string, content: stri
 
       const textToWrite = typeof formatted === 'string' && formatted.length > 0 ? formatted : content;
       fs.writeFileSync(filePath, textToWrite, 'utf-8');
-      try { mainWindow?.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath } }); } catch {}
+      notifyExplorerRefresh(filePath);
       return { success: true, formattedContent: formatted ?? undefined };
     }
 
     // 非GLSL・整形なし指定はそのまま保存
     fs.writeFileSync(filePath, content, 'utf-8');
-    try { mainWindow?.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath } }); } catch {}
+    notifyExplorerRefresh(filePath);
     return { success: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -382,7 +389,7 @@ ipcMain.handle(IPC.FILE_SAVE_AS, async (event: any, content: string): Promise<{ 
   if (!result.canceled && result.filePath) {
     try {
       fs.writeFileSync(result.filePath, content, 'utf-8');
-      try { mainWindow?.webContents.send(IPC.APP_ACTION, { type: 'explorer:refresh', payload: { filePath: result.filePath } }); } catch {}
+      notifyExplorerRefresh(result.filePath);
       return {
         success: true,
         filePath: result.filePath,
@@ -909,7 +916,10 @@ ipcMain.handle(IPC.SESSION_LOAD, async (event: any, trackPath: string) => {
         };
         mainWindow.setBounds(newBounds);
       }
-    } catch {}
+    } catch (error) {
+      // ウィンドウの位置を戻せなくても、タブの復元は続けさせる
+      console.error('Failed to apply window bounds from session:', error);
+    }
     return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

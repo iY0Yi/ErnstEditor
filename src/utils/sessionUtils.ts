@@ -33,44 +33,17 @@ export function createSessionFromTabs(
     }));
 
   // エディタのフォントサイズ（ズーム相当）を取得
-  let editorFontSize: number | undefined = undefined;
-  try {
-    const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
-    if (editor) {
-      // エディターの現在のフォントサイズを堅牢に取得
-      let fontSize: any = undefined;
-      try {
-        if (editor.getOption) {
-          fontSize = editor.getOption(monaco.editor.EditorOption.fontSize);
-        }
-      } catch {}
-      if (fontSize == null) {
-        try {
-          const opts = editor.getOptions?.();
-          fontSize = opts?.get?.(monaco.editor.EditorOption.fontSize) ?? opts?.fontSize;
-        } catch {}
-      }
-      if (typeof fontSize === 'number') editorFontSize = fontSize;
-    }
-  } catch {}
+  const editor = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+  const fontSize = editor?.getOption?.(monaco.editor.EditorOption.fontSize);
+  const editorFontSize: number | undefined = typeof fontSize === 'number' ? fontSize : undefined;
 
   // サイドバー幅（App 側が window に保持している場合を考慮）
-  let sidebarWidth: number | undefined = undefined;
-  try {
-    const w = (window as any).__ERNST_UI_STATE__?.sidebarWidth;
-    if (typeof w === 'number') sidebarWidth = w;
-  } catch {}
+  const w = (window as any).__ERNST_UI_STATE__?.sidebarWidth;
+  const sidebarWidth: number | undefined = typeof w === 'number' ? w : undefined;
 
-  // ウィンドウ位置とサイズ
-  let windowBounds: any = undefined;
-  try {
-    const currentWindow = (window as any).require?.('electron')?.remote?.getCurrentWindow?.();
-    // remote は無効なので、メインプロセスからの保存に依存する。renderer 側では直近値を UI_STATE に保持しておく
-    const s = (window as any).__ERNST_UI_STATE__?.windowBounds;
-    if (s && typeof s.width === 'number' && typeof s.height === 'number') {
-      windowBounds = s;
-    }
-  } catch {}
+  // ウィンドウ位置とサイズ。保存時にメインプロセスが現在値で上書きするので、renderer 側は直近値を UI_STATE から渡すだけ
+  const s = (window as any).__ERNST_UI_STATE__?.windowBounds;
+  const windowBounds: any = s && typeof s.width === 'number' && typeof s.height === 'number' ? s : undefined;
 
   return {
     projectPath,

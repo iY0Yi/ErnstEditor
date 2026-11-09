@@ -124,14 +124,10 @@ export class InlineFloatManager {
           ? (result as any).formattedContent
           : content;
         if (updated !== content) {
-          try {
-            const model = this.editor?.getModel?.();
-            if (model) {
-              const { applyModelEdits } = require('../../utils/monacoUtils');
-              const fullRange = model.getFullModelRange();
-              applyModelEdits(model, [{ range: fullRange, text: updated }]);
-            }
-          } catch {}
+          const model = this.editor?.getModel?.();
+          if (model) {
+            applyModelEdits(model, [{ range: model.getFullModelRange(), text: updated }]);
+          }
         }
 
         // タブ情報を更新

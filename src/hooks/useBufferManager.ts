@@ -86,13 +86,11 @@ export function useBufferManager({
         if (tab.id !== tabId) return tab;
         const next = { ...tab, ...updates } as FileTab;
         // モデルが欠落/破棄されている場合は再生成
-        try {
-          const disposed = next.model && typeof next.model.isDisposed === 'function' ? next.model.isDisposed() : false;
-          if ((!next.model || disposed) && (updates.content !== undefined || updates.language !== undefined)) {
-            const model = createModel(next.content, next.language, next.filePath || undefined);
-            return { ...next, model };
-          }
-        } catch {}
+        const disposed = next.model && typeof next.model.isDisposed === 'function' ? next.model.isDisposed() : false;
+        if ((!next.model || disposed) && (updates.content !== undefined || updates.language !== undefined)) {
+          const model = createModel(next.content, next.language, next.filePath || undefined);
+          return { ...next, model };
+        }
         return next;
       })
     );
@@ -169,25 +167,21 @@ export function useBufferManager({
 
       // Step 3: Monaco Editorの内容を切り替え
       // disposed モデルなら再生成
-      try {
-        if (targetTab.model && typeof targetTab.model.isDisposed === 'function' && targetTab.model.isDisposed()) {
-          const recreated = createModel(targetTab.content, targetTab.language, targetTab.filePath || undefined);
-          targetTab = { ...targetTab, model: recreated } as FileTab;
-          // タブ配列にも反映
-          _setTabs(prev => prev.map(t => t.id === targetTab!.id ? (targetTab as FileTab) : t));
-        }
-      } catch {}
+      if (targetTab.model && typeof targetTab.model.isDisposed === 'function' && targetTab.model.isDisposed()) {
+        const recreated = createModel(targetTab.content, targetTab.language, targetTab.filePath || undefined);
+        targetTab = { ...targetTab, model: recreated } as FileTab;
+        // タブ配列にも反映
+        _setTabs(prev => prev.map(t => t.id === targetTab!.id ? (targetTab as FileTab) : t));
+      }
 
       if (targetTab.model) {
         editorInstance.setModel(targetTab.model);
 
         // フォントサイズを毎回適用（エディタ側で初期化により戻るケース対策）
-        try {
-          const last = (window as any).__ERNST_LAST_SESSION__;
-          if (last && typeof last.editorFontSize === 'number') {
-            editorInstance.updateOptions({ fontSize: last.editorFontSize });
-          }
-        } catch {}
+        const last = (window as any).__ERNST_LAST_SESSION__;
+        if (last && typeof last.editorFontSize === 'number') {
+          editorInstance.updateOptions({ fontSize: last.editorFontSize });
+        }
 
         // シンタックスハイライトを明示的に有効化
         if (monaco && monaco.editor) {
@@ -393,24 +387,18 @@ export function useBufferManager({
         }
       }
 
-      if (!editorInstance) {
-        // ここで即 return せず、Save As にフォールバックできるよう継続
-      }
-
-      // 追加フォールバック: 現在のエディタモデルからタブを逆引き
+      // 追加フォールバック: 現在のエディタモデルからタブを逆引き (エディタが無くても Save As へ進めるよう続ける)
       if (!activeTab || !activeTab.filePath) {
-        try {
-          const currentModel = editorInstance.getModel?.();
-          if (currentModel) {
-            const found = _tabsRef.current.find(t => t.model === currentModel);
-            if (found) {
-              activeTab = found;
-              if (_activeTabId !== found.id) {
-                _setActiveTabId(found.id);
-              }
+        const currentModel = editorInstance?.getModel?.();
+        if (currentModel) {
+          const found = _tabsRef.current.find(t => t.model === currentModel);
+          if (found) {
+            activeTab = found;
+            if (_activeTabId !== found.id) {
+              _setActiveTabId(found.id);
             }
           }
-        } catch {}
+        }
       }
 
       if (!activeTab) {
@@ -543,19 +531,17 @@ export function useBufferManager({
     let activeTab = getActiveTab();
     if (!activeTab) {
       // フォールバック: 現在のエディタモデルから推測
-      try {
-        const editorInstance = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
-        const currentModel = editorInstance?.getModel?.();
-        if (currentModel) {
-          const found = _tabsRef.current.find(t => t.model === currentModel) || null;
-          if (found) {
-            activeTab = found;
-            if (_activeTabId !== found.id) {
-              _setActiveTabId(found.id);
-            }
+      const editorInstance = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+      const currentModel = editorInstance?.getModel?.();
+      if (currentModel) {
+        const found = _tabsRef.current.find(t => t.model === currentModel) || null;
+        if (found) {
+          activeTab = found;
+          if (_activeTabId !== found.id) {
+            _setActiveTabId(found.id);
           }
         }
-      } catch {}
+      }
     }
     if (!activeTab) {
       // さらにフォールバック: タブが一つだけならそれを対象にする
@@ -573,13 +559,11 @@ export function useBufferManager({
 
     try {
       // 現在の内容を取得（エディタ未準備時のフォールバック付き）
-      let content: string | undefined;
-      try {
-        const editorInstance = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
-        content = editorInstance?.getValue?.();
-      } catch {}
-      if (typeof content !== 'string') {
-        try { content = activeTab.model?.getValue?.(); } catch {}
+      const editorInstance = (window as any).monacoEditorInstance || (window as any).monaco?.editor?.getEditors?.()?.[0];
+      let content: string | undefined = editorInstance?.getValue?.();
+      // 破棄済みのモデルは getValue が投げるので、タブの content に任せる
+      if (typeof content !== 'string' && !activeTab.model?.isDisposed?.()) {
+        content = activeTab.model?.getValue?.();
       }
       if (typeof content !== 'string') {
         content = activeTab.content ?? '';
