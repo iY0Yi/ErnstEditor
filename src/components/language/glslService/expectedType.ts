@@ -47,7 +47,7 @@ export function inferExpectedTypes(textBefore: string, env: ExpectedTypeEnv): st
     const lhs = t.slice(0, -1).trimEnd();
     const decl = /\b([A-Za-z_]\w*)\s+[A-Za-z_]\w*\s*(?:\[[^\]]*\])?$/.exec(lhs);
     if (decl && env.isType(decl[1])) return [decl[1]];
-    const assign = /([A-Za-z_]\w*)(?:\.([xyzwrgba]{1,4}))?$/.exec(lhs);
+    const assign = /(\$?[A-Za-z_]\w*)(?:\.([xyzwrgba]{1,4}))?$/.exec(lhs);
     if (!assign) return null;
     const type = env.variableType(assign[1]);
     if (!type) return null;

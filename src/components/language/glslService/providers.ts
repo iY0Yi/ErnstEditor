@@ -25,7 +25,7 @@ import {
   parseCached
 } from './workspaceIndex';
 import { bestFit } from './typeSystem';
-import { providePlaceholderCompletions } from './uberPlaceholders';
+import { placeholdersOf } from './uberPlaceholders';
 
 type MonacoApi = typeof Monaco;
 type Model = Monaco.editor.ITextModel;
@@ -148,10 +148,10 @@ function memberCompletions(
   monaco: MonacoApi,
   receiver: string,
   table: SymbolTable,
-  locals: Map<string, string>,
+  variableType: (name: string) => string | undefined,
   range: Monaco.IRange
 ): Monaco.languages.CompletionItem[] | null {
-  const type = locals.get(receiver) ?? table.variables.get(receiver)?.type;
+  const type = variableType(receiver);
   if (!type) return null;
   const Kind = monaco.languages.CompletionItemKind;
   const struct = table.structs.get(type);
@@ -185,29 +185,36 @@ async function provideCompletions(
   position: Monaco.Position
 ): Promise<Monaco.languages.CompletionList> {
   const lineToCursor = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
-  // #include のパスと $ プレースホルダは専用のプロバイダーに任せる
-  if (/^\s*#\s*include\b/.test(lineToCursor) || /\$\w*$/.test(lineToCursor)) return { suggestions: [] };
+  // #include のパスは専用のプロバイダーに任せる
+  if (/^\s*#\s*include\b/.test(lineToCursor)) return { suggestions: [] };
 
   const doc = parseModel(model);
   const docPath = filePathOfModel(model);
   const ctx = await buildContext(docPath, doc);
   const table = buildSymbolTable(doc, ctx);
   const locals = collectLocalDeclarations(doc.code, table.structs.keys());
+  const placeholders = await placeholdersOf(docPath);
+  const variableType = (name: string): string | undefined =>
+    placeholders.get(name)?.type ?? locals.get(name) ?? table.variables.get(name)?.type;
 
+  // Monaco の単語は $ を含まないので、$ の直後なら range を $ の位置から取り、$ ごと置き換える
+  const dollar = /\$\w*$/.exec(lineToCursor)?.[0];
   const word = model.getWordUntilPosition(position);
-  const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+  const range = dollar
+    ? new monaco.Range(position.lineNumber, position.column - dollar.length, position.lineNumber, position.column)
+    : new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
 
-  const member = /([A-Za-z_]\w*)\s*\.\s*\w*$/.exec(lineToCursor);
+  const member = /(\$?[A-Za-z_]\w*)\s*\.\s*\w*$/.exec(lineToCursor);
   if (member) {
     // 型が分からない (ubo など) ときは空を返し、Monaco の単語補完に任せる
-    return { suggestions: memberCompletions(monaco, member[1], table, locals, range) ?? [] };
+    return { suggestions: memberCompletions(monaco, member[1], table, variableType, range) ?? [] };
   }
 
   const libs = ctx.trackRoot ? await getLibModules(ctx.trackRoot) : [];
   const startLine = Math.max(1, position.lineNumber - 30);
-  const textBefore = stripComments(model.getValueInRange(new monaco.Range(startLine, 1, position.lineNumber, word.startColumn)));
+  const textBefore = stripComments(model.getValueInRange(new monaco.Range(startLine, 1, position.lineNumber, range.startColumn)));
   const env: ExpectedTypeEnv = {
-    variableType: name => locals.get(name) ?? table.variables.get(name)?.type,
+    variableType,
     isType: name => BUILTIN_TYPE_SET.has(name) || table.structs.has(name),
     overloads: name => {
       const reachable = table.functions.get(name);
@@ -227,6 +234,21 @@ async function provideCompletions(
   const add = (key: string, item: Monaco.languages.CompletionItem): void => {
     if (key !== declaring && !items.has(key)) items.set(key, item);
   };
+
+  const placeholderItems = [...placeholders.values()].map((p, idx): Monaco.languages.CompletionItem => ({
+    label: p.name,
+    kind: Kind.Variable,
+    detail: p.type,
+    documentation: { value: p.desc },
+    insertText: p.name,
+    // $ 無しで打ったときは、打った cp と照合させる
+    filterText: dollar ? p.name : p.name.slice(1),
+    sortText: rank([p.type]) + (dollar ? '' : SORT_LOCAL) + String(idx).padStart(3, '0'),
+    range
+  }));
+  // range が $ を含むので、ほかの候補を出すと確定で $ が消える
+  if (dollar) return { suggestions: placeholderItems };
+  for (const item of placeholderItems) add(item.insertText, item);
 
   for (const [name, type] of locals) {
     add(name, { label: name, kind: Kind.Variable, detail: type, insertText: name, sortText: rank([type]) + SORT_LOCAL, range });
@@ -411,6 +433,13 @@ async function provideHover(monaco: MonacoApi, model: Model, position: Monaco.Po
   const word = model.getWordAtPosition(position);
   if (!word) return null;
   const before = model.getLineContent(position.lineNumber).slice(0, word.startColumn - 1);
+  if (before.endsWith('$')) {
+    // $cp の cp で同名の関数や変数を引かないよう、見つからなくても先へ進めない
+    const p = (await placeholdersOf(filePathOfModel(model))).get(`$${word.word}`);
+    if (!p) return null;
+    const range = new monaco.Range(position.lineNumber, word.startColumn - 1, position.lineNumber, word.endColumn);
+    return { range, contents: [{ value: ['```glsl\n' + `${p.type} ${p.name}` + '\n```', p.desc, `*uber_scripts/${p.context} のプレースホルダ*`].join('\n\n') }] };
+  }
   if (/\.\s*$/.test(before)) return null;
   const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
 
@@ -481,7 +510,7 @@ export function registerGlslLanguageFeatures(monaco: MonacoApi): void {
   registered = true;
 
   monaco.languages.registerCompletionItemProvider('glsl', {
-    triggerCharacters: ['.'],
+    triggerCharacters: ['.', '$'],
     provideCompletionItems: (model, position) => provideCompletions(monaco, model, position)
   });
   monaco.languages.registerHoverProvider('glsl', {
@@ -495,9 +524,5 @@ export function registerGlslLanguageFeatures(monaco: MonacoApi): void {
   monaco.languages.registerCompletionItemProvider('glsl', {
     triggerCharacters: ['/', '.', '"', '-', '_', ...INCLUDE_PATH_WORD_TRIGGERS],
     provideCompletionItems: (model, position) => provideIncludePathCompletions(monaco, model, position)
-  });
-  monaco.languages.registerCompletionItemProvider('glsl', {
-    triggerCharacters: ['$'],
-    provideCompletionItems: (model, position) => providePlaceholderCompletions(monaco, model, position)
   });
 }

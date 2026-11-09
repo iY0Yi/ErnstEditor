@@ -286,5 +286,6 @@ export function collectLocalDeclarations(code: string, structNames: Iterable<str
 }
 
 export function collectIdentifiers(code: string): Set<string> {
-  return new Set(code.match(/[A-Za-z_]\w+/g) ?? []);
+  // $cp の cp は識別子ではない
+  return new Set(code.match(/(?<![\w$])[A-Za-z_]\w+/g) ?? []);
 }
